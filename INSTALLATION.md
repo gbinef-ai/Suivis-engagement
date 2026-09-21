@@ -1,105 +1,143 @@
-# Installation et déploiement — Engagements & trésorerie (branche `vercel`)
+# Installation et exploitation — Engagements & trésorerie (branche `vercel`)
 
-Application de suivi des engagements du Groupe Toguna, hébergée sur Vercel comme site statique.
-Durée du déploiement : quelques minutes, sans installation d'outils sur votre poste.
+Application de suivi des engagements du Groupe Toguna. Site statique hébergé sur Vercel,
+données et authentification sur Supabase.
 
-## Ce que cette branche change
+## Architecture
 
-Firebase a été retiré : plus de Cloud Firestore, plus de connexion Google, plus de
-`firebase deploy`. L'application fonctionne en **mode autonome** — les données vivent dans le
-stockage local du navigateur qui l'ouvre.
+| Élément | Où |
+| --- | --- |
+| Application | `index.html`, servi par Vercel |
+| Comptes et mots de passe | Supabase Auth |
+| Engagements, référentiels, journal | Supabase Postgres |
+| Droits par module | Table `profils` + table `droits`, appliqués par Row Level Security |
 
-**À lire avant de déployer.** Cette architecture a une conséquence directe :
-
-| | Branche `main` (Firebase) | Branche `vercel` |
-| --- | --- | --- |
-| Hébergement | Firebase Hosting | Vercel |
-| Données | Cloud Firestore, partagées | Stockage du navigateur, par poste |
-| Accès | Connexion Google, liste d'autorisés | Ouvert à qui a l'adresse |
-| Travail à plusieurs | Oui, en temps réel | **Non** |
-| Habilitations | Trois rôles appliqués | Tous droits pour chacun |
-| Perte de données | Sauvegarde Firestore | Vider le cache du navigateur efface tout |
-
-Autrement dit : chaque personne qui ouvre l'application a sa propre copie des données, et
-personne ne voit les saisies des autres. Si les trois collaborateurs doivent partager le même
-échéancier, c'est la branche `main` qu'il faut déployer, pas celle-ci.
-
-Cette branche convient pour : une consultation individuelle, une démonstration, un poste de
-travail unique, ou une mise en ligne rapide sans configuration.
+Le partage est rétabli : les trois collaborateurs voient les mêmes données, et une saisie
+apparaît chez les autres sans rechargement.
 
 ## Contenu du dossier
 
 | Fichier | Rôle |
 | --- | --- |
 | `index.html` | L'application complète. Ne rien y modifier. |
+| `supabase-config.js` | Adresse du projet et clé publique. |
+| `supabase/schema.sql` | Tables, droits, politiques de sécurité et compte administrateur. |
 | `vercel.json` | Paramètres d'hébergement. À laisser tel quel. |
-| `donnees/engagements-toguna.json` | Vos 246 engagements, référentiels et taux. |
+| `donnees/engagements-toguna.json` | Les 246 engagements d'origine, pour un rechargement. |
 
-## Étape 1 — Déployer
+## Le compte administrateur
 
-1. Ouvrez [vercel.com](https://vercel.com) et connectez-vous avec votre compte GitHub.
-2. **Add New** → **Project**, puis importez le dépôt `gbinef-ai/Suivis-engagement`.
-3. Dans **Framework Preset**, laissez **Other**. Ne renseignez ni commande de build ni dossier
-   de sortie : le site est déjà statique.
-4. Dans les réglages du projet, section **Git**, choisissez `vercel` comme **Production Branch**.
-5. **Deploy**.
+**binef@groupetoguna.com**, mot de passe initial **Toguna2010**.
 
-Vercel affiche à la fin une adresse de la forme `https://suivis-engagement.vercel.app`.
+À la première connexion, l'application impose le choix d'un mot de passe personnel avant
+de donner accès aux données. Ce mot de passe initial a circulé par écrit : changez-le dès
+la première ouverture, et ne le réutilisez pas ailleurs.
 
-Aucune clé, aucun jeton, aucune variable d'environnement n'est à fournir : l'application
-n'appelle aucun service extérieur.
+## Rôles et droits par module
 
-## Étape 2 — Vérifier
+Trois rôles fixent les droits par défaut sur les dix modules. Le trésorier peut ensuite
+lever ou retirer un module à une personne précise : c'est l'**exception**, qui remplace le
+droit du rôle pour ce module seulement.
 
-1. Ouvrez l'adresse affichée. Le tableau de bord s'affiche directement, sans écran de connexion.
-2. Au premier chargement, l'application lit `donnees/engagements-toguna.json` et enregistre son
-   contenu dans le navigateur. Le bandeau de gauche indique **mode autonome**.
-3. Vérifiez les totaux : **246 engagements, 207 060 412 249 FCFA**.
-4. Onglet Échéancier : 149 lignes vivantes.
-5. Onglet En instance : 39 dossiers, dont 20 en négociation fournisseur.
-6. Onglet Historique : 97 engagements soldés.
+| Module | Trésorier | Gestionnaire | Consultation |
+| --- | --- | --- | --- |
+| Tableau de bord | Saisie | Consultation | Consultation |
+| Échéancier | Saisie | Saisie | Consultation |
+| Dossiers | Saisie | Saisie | Consultation |
+| En instance | Saisie | Saisie | Consultation |
+| Historique | Saisie | Consultation | Consultation |
+| Nouvel engagement | Saisie | Saisie | Aucun accès |
+| Contrôles | Saisie | Consultation | Consultation |
+| Reprise Excel | Saisie | Saisie | Aucun accès |
+| Référentiels | Saisie | Consultation | Aucun accès |
+| Journal | Saisie | Consultation | Consultation |
 
-Cet amorçage n'a lieu qu'une fois par navigateur. Les modifications que vous saisissez ensuite ne
-sont jamais écrasées par le fichier livré, et un engagement supprimé ne réapparaît pas.
+Un module en « Aucun accès » n'apparaît pas dans la navigation de la personne.
 
-## Sauvegardes — le point le plus important
+**Où régler cela** : onglet **Référentiels**, encadré *Utilisateurs et habilitations*.
+Le bouton **Droits** d'une ligne ouvre la matrice des dix modules pour cette personne.
+Votre propre rôle et votre propre activation ne sont pas modifiables, pour éviter de vous
+fermer l'accès par mégarde.
 
-En mode autonome, vider le cache du navigateur, changer de poste ou réinitialiser le profil
-efface les données. La sauvegarde est la seule protection.
+### Ce qui est réellement appliqué, et ce qui ne l'est pas
 
-Chaque semaine, au minimum : onglet **Référentiels** → **Télécharger la sauvegarde**, et rangez le
-fichier hors de l'application.
+À connaître avant de vous reposer dessus : les engagements alimentent plusieurs modules à
+la fois, donc le serveur ne sait pas distinguer plus finement que la table. Row Level
+Security applique deux choses de façon inviolable :
 
-Pour repartir d'une sauvegarde : onglet **Référentiels** → section **Restaurer une sauvegarde**,
-collez le contenu du fichier, puis **Restaurer**. La restauration remplace intégralement le
-contenu présent.
+- **la lecture** des engagements, ouverte à qui peut consulter l'un des modules qui les affichent ;
+- **l'écriture**, réservée à qui peut saisir dans l'Échéancier, Nouvel engagement ou Reprise Excel.
 
-## Mises à jour
+Le fait qu'un onglet disparaisse de la navigation est, lui, une commodité d'interface. Une
+personne en consultation ne peut rien modifier — le serveur refuse — mais le cloisonnement
+module par module n'est pas une barrière étanche contre quelqu'un de déterminé. Pour une
+séparation stricte, il faudrait éclater les engagements en tables distinctes par périmètre.
 
-Toute modification poussée sur la branche `vercel` est déployée automatiquement par Vercel.
-Les données enregistrées dans les navigateurs ne sont pas touchées.
+## Ajouter un collaborateur
 
-## Nom de domaine du Groupe
+1. La personne ouvre l'application et clique **Créer un compte**.
+2. Son compte est créé **inactif** et en consultation seule : il n'ouvre rien.
+3. Vous l'activez : onglet **Référentiels** → *Utilisateurs et habilitations* → case **Actif**,
+   puis choisissez son rôle et, si besoin, ses exceptions.
 
-Pour une adresse du type `engagements.groupetoguna.com` : tableau de bord Vercel → projet →
-**Settings** → **Domains** → **Add**. Vercel indique l'enregistrement DNS à créer chez votre
-hébergeur de domaine et fournit le certificat HTTPS automatiquement.
+L'inscription peut donc rester ouverte sans exposer les données : un compte non activé ne
+lit rien, la politique de sécurité le refuse au niveau de la base.
 
-## Accès
+Pour retirer l'accès à quelqu'un : décochez **Actif**. La coupure est immédiate côté serveur.
 
-Le site est public : toute personne connaissant l'adresse voit l'application. Elle ne voit
-cependant que les données de son propre navigateur, jamais les vôtres — le fichier livré est en
-revanche lisible par tous.
+## Réinstaller depuis zéro
 
-Pour restreindre l'accès, deux possibilités côté Vercel : **Settings** → **Deployment
-Protection** → **Vercel Authentication**, qui limite l'accès aux membres de votre équipe Vercel,
-ou **Password Protection**, sur les offres payantes.
+1. Créez un projet Supabase, puis **SQL Editor** → **New query** → collez tout
+   `supabase/schema.sql` → **Run**. Cela crée les tables, les politiques de sécurité, le
+   déclencheur de création de profil et le compte administrateur.
+2. Dans **Project Settings → API**, relevez *Project URL* et la clé *anon public*, et
+   reportez-les dans `supabase-config.js`.
+3. Chargez les 246 engagements : `donnees/engagements-toguna.json` contient les périodes et
+   les référentiels, à écrire dans les tables `engagements` et `referentiels` sous la forme
+   `{ id, data }` — une ligne par période.
+4. Déployez sur Vercel.
 
-Si le contenu des 246 engagements ne doit pas être exposé publiquement, préférez la branche
-`main` et son hébergement Firebase avec connexion Google.
+`supabase-config.js` ne contient que des valeurs publiques : la clé *anon* n'ouvre que ce
+que les politiques autorisent, une fois la personne authentifiée. N'y mettez jamais la clé
+*service_role*, qui contourne toute la sécurité.
+
+Si les valeurs restent à `A_REMPLACER`, l'application démarre en mode autonome : données
+dans le navigateur, sans authentification ni partage. Le pied du bandeau l'indique.
+
+## Déploiement
+
+Le projet Vercel est `suivis-engagement`, branche de production `vercel`.
+Alias stable : https://suivis-engagement.vercel.app
+
+Une fois le dépôt GitHub connecté à Vercel, tout `git push` sur la branche `vercel`
+redéploie. Tant qu'il ne l'est pas, le déploiement se fait en ligne de commande :
+
+```
+vercel deploy --prod --yes --scope essaie3
+```
+
+## Sauvegardes
+
+Les données vivent maintenant sur Supabase, qui conserve des sauvegardes quotidiennes sur
+les sept derniers jours dans l'offre gratuite. Cela ne dispense pas de la sauvegarde
+applicative : onglet **Référentiels** → **Télécharger la sauvegarde**, chaque semaine, et
+rangez le fichier hors de l'application. C'est elle qui permet de repartir ailleurs.
+
+## Vérification après installation
+
+1. L'adresse ouvre un écran de connexion, pas l'application.
+2. Connexion administrateur : le changement de mot de passe est demandé.
+3. Après changement : tableau de bord, **246 échéances, 207 060 412 249 FCFA**.
+4. Échéancier : 149 lignes vivantes. En instance : 39 dossiers. Historique : 97 soldés.
+5. Créez un compte de test, vérifiez qu'il n'ouvre rien avant activation, puis passez-le en
+   consultation seule et vérifiez que Nouvel engagement, Reprise Excel et Référentiels
+   n'apparaissent pas dans sa navigation.
 
 ## Coût
 
-Le plan gratuit Hobby de Vercel suffit largement : 100 Go de transfert par mois pour un site de
-175 Ko. Aucun moyen de paiement n'est demandé. Ce plan est réservé à un usage non commercial ;
-pour un usage professionnel, Vercel demande le plan Pro.
+Supabase, offre gratuite : 500 Mo de base, 50 000 utilisateurs actifs par mois. Les 246
+engagements pèsent moins de 1 Mo. Un projet gratuit est mis en pause après une semaine
+sans aucune requête — à trois utilisateurs quotidiens, cela n'arrivera pas.
+
+Vercel, offre Hobby : réservée à un usage non commercial. Pour une application de trésorerie
+du Groupe, Vercel attend en principe l'offre Pro.
