@@ -2,6 +2,10 @@
 .env*
 .vercel
 
+# Ni le schema de base : il n'a rien a faire sur le web et decrit la
+# securite de la base
+supabase
+
 # Ni l'historique et la configuration git
 .git
 .gitattributes

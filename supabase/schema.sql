@@ -242,14 +242,23 @@ create trigger trg_creer_profil after insert on auth.users
 for each row execute function public.creer_profil();
 
 -- ===========================================================================
--- 6. Compte administrateur
---    binef@groupetoguna.com, mot de passe initial Toguna2010.
---    doit_changer_mdp reste à true : l'application impose le changement
---    avant de donner accès aux données.
+-- 6. Compte administrateur : binef@groupetoguna.com
+--
+--    AVANT D'EXÉCUTER CE FICHIER, remplacez MOT_DE_PASSE_INITIAL ci-dessous
+--    par un mot de passe choisi au moment de l'installation.
+--
+--    Ne laissez jamais un mot de passe réel dans ce fichier : il est versionné
+--    dans un dépôt Git, donc lisible par tous ceux qui y ont accès, et
+--    l'historique en garde la trace même après correction.
+--
+--    doit_changer_mdp reste à true : l'application impose le changement avant
+--    de donner accès aux données.
 -- ===========================================================================
 
 do $$
-declare uid uuid;
+declare
+  uid uuid;
+  mdp_initial text := 'MOT_DE_PASSE_INITIAL';
 begin
   select id into uid from auth.users where lower(email) = 'binef@groupetoguna.com';
 
@@ -267,7 +276,7 @@ begin
       phone_change, phone_change_token, reauthentication_token
     ) values (
       uid, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-      'binef@groupetoguna.com', crypt('Toguna2010', gen_salt('bf')),
+      'binef@groupetoguna.com', crypt(mdp_initial, gen_salt('bf')),
       now(), now(), now(),
       '{"provider":"email","providers":["email"]}'::jsonb,
       '{"nom":"Administrateur"}'::jsonb,

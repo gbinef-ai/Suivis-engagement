@@ -27,11 +27,13 @@ apparaît chez les autres sans rechargement.
 
 ## Le compte administrateur
 
-**binef@groupetoguna.com**, mot de passe initial **Toguna2010**.
+**binef@groupetoguna.com**, rôle trésorier.
 
-À la première connexion, l'application impose le choix d'un mot de passe personnel avant
-de donner accès aux données. Ce mot de passe initial a circulé par écrit : changez-le dès
-la première ouverture, et ne le réutilisez pas ailleurs.
+Le mot de passe initial est transmis à part, jamais dans ce dépôt : celui-ci est versionné
+et son historique conserve tout ce qu'on y écrit, même après correction.
+
+À la première connexion, l'application impose le choix d'un mot de passe personnel avant de
+donner accès aux données. Tant que ce changement n'est pas fait, le compte n'ouvre rien.
 
 ## Rôles et droits par module
 
