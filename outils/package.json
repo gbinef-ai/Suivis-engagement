@@ -1,0 +1,8 @@
+{
+  "name": "import-engagements-toguna",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": { "import": "node import-firestore.mjs" },
+  "dependencies": { "firebase-admin": "^12.1.0" }
+}

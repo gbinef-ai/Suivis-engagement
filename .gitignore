@@ -1,0 +1,15 @@
+# Clé de compte de service Firebase — accès complet à la base, ne jamais publier
+outils/cle-service.json
+
+# Cache de déploiement Firebase
+.firebase/
+
+# Dépendances
+node_modules/
+
+# Sauvegardes téléchargées depuis l'application
+sauvegarde-engagements-*.json
+echeancier-*.csv
+
+# Vercel
+.vercel/
