@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "headers": [
+    {
+      "source": "/index.html",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+    },
+    {
+      "source": "/donnees/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0" }]
+    }
+  ],
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}
