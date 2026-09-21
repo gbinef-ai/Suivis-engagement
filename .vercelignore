@@ -1,0 +1,8 @@
+# Ne pas publier : jetons locaux et metadonnees du CLI
+.env*
+.vercel
+
+# Ni l'historique et la configuration git
+.git
+.gitattributes
+.gitignore
