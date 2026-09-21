@@ -184,6 +184,32 @@ main{flex:1;min-width:0;padding:18px 22px 60px;max-width:1560px;width:100%}
 .jauge .piste i{display:block;height:100%;background:var(--blue)}
 .jauge .pc{font-variant-numeric:tabular-nums;min-width:46px;text-align:right;font-size:11.5px}
 
+/* ---------- échéancier ---------- */
+.kpi.compact{padding:9px 12px}
+.kpi.compact .k{margin-bottom:4px}
+.kpi.compact .v{font-size:19px}
+.filters .large{grid-column:span 2}
+.filtres-actifs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:7px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-2)}
+.filtres-actifs .lib{margin-right:2px}
+.chip{display:inline-block;background:var(--blue-2);color:var(--blue);border:1px solid var(--blue);border-radius:999px;padding:1px 8px;font-size:11.5px;white-space:nowrap}
+table.ech th{font-size:10.5px;letter-spacing:.02em;text-transform:uppercase;padding:8px 9px}
+table.ech td{padding:6px 9px;font-size:12.5px}
+table.ech tr.ligne{cursor:pointer}
+table.ech tr.ligne:hover td{background:var(--blue-2)}
+table.ech td.date b{display:block;font-variant-numeric:tabular-nums}
+table.ech td.date small{display:block;font-size:10.5px;color:var(--ink-3);margin-top:1px}
+table.ech td.date small.retard{color:var(--red);font-weight:700}
+table.ech td.date small.proche{color:var(--amber);font-weight:700}
+table.ech td.mono small{display:block;font-size:10.5px;color:var(--ink-3);margin-top:1px}
+table.ech td.entite{font-weight:600}
+table.ech td.reste b{font-weight:700}
+table.ech .monthband td{background:var(--blue-2);color:var(--ink);font-size:12px;border-top:1px solid var(--line-strong);border-bottom:1px solid var(--line-strong)}
+table.ech .monthband .nb{font-weight:500;color:var(--ink-2);font-size:11.5px;margin-left:8px}
+table.ech tfoot td{font-weight:700;background:var(--surface-2);border-top:2px solid var(--line-strong);padding:8px 9px;font-size:12.5px}
+.prog{display:flex;align-items:center;gap:6px;min-width:100px}
+.prog .bar{flex:1;min-width:48px}
+.prog .pc{font-size:11px;font-variant-numeric:tabular-nums;min-width:36px;text-align:right;color:var(--ink-2)}
+
 /* ---------- blocks ---------- */
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
 .panel + .panel{margin-top:14px}
@@ -1056,6 +1082,7 @@ function abrMois(m){
   var p=String(m||"").split("-"); return p.length<2 ? "" : A[Number(p[1])-1]+" "+p[0];
 }
 function montant(e){ return Number(e.montantXof)||0; }
+function n0(v){ return v?num(v):"–"; }
 function pct1(p){ return (Number(p)||0).toLocaleString("fr-FR",{minimumFractionDigits:1,maximumFractionDigits:1})+" %"; }
 function part(a,t){ return t ? a/t*100 : 0; }
 function cle(v){ return (v==null || v==="") ? "—" : String(v); }
@@ -1405,55 +1432,115 @@ function filtered(){
 function selOpts(list, val){
   return list.map(function(o){ return '<option value="'+esc(o)+'"'+(o===val?" selected":"")+">"+esc(o)+"</option>"; }).join("");
 }
+function filtresParDefaut(){
+  return { q:"", entite:"", contrepartie:"", fournisseur:"", mode:"", statut:"", devise:"", du:"", au:"", brouillon:"masquer" };
+}
+function filtresActifs(){
+  var d=filtresParDefaut(), f=S.filters, n=[];
+  Object.keys(d).forEach(function(k){ if((f[k]||"")!==d[k]) n.push(k); });
+  return n;
+}
+/* Les filtres en clair, pour le rappel à l'écran et le cartouche du PDF. */
+function libFiltres(){
+  var f=S.filters, p=[];
+  if(f.q) p.push("recherche « "+f.q+" »");
+  if(f.entite) p.push("entité "+f.entite);
+  if(f.contrepartie) p.push("banque "+f.contrepartie);
+  if(f.fournisseur) p.push("fournisseur "+f.fournisseur);
+  if(f.mode) p.push("mode "+f.mode);
+  if(f.statut) p.push("statut "+f.statut);
+  if(f.devise) p.push("devise "+f.devise);
+  if(f.du||f.au) p.push("échéances"+(f.du?" du "+dfr(f.du):"")+(f.au?" au "+dfr(f.au):""));
+  if(f.brouillon==="inclure") p.push("brouillons inclus");
+  else if(f.brouillon==="seuls") p.push("brouillons seulement");
+  return p;
+}
+function echeanceHint(e){
+  var d=days(e.dateEcheance);
+  if(d===null || estSolde(e) || reste(e)<=0) return "";
+  if(d<0)   return '<small class="retard">Retard '+(-d)+' j</small>';
+  if(d===0) return '<small class="retard">Aujourd\'hui</small>';
+  if(d<=Number(S.params.seuilProche||30)) return '<small class="proche">J-'+d+'</small>';
+  return '<small>J-'+d+'</small>';
+}
+function kpiC(k,v,d,cls){
+  return '<div class="kpi compact '+(cls||"")+'"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'<small>FCFA</small></div><div class="d"><span>'+esc(d)+'</span></div></div>';
+}
+
 function vEcheancier(){
   var rows=filtered();
-  var tot=rows.reduce(function(s,e){ return s+(Number(e.montantXof)||0); },0);
-  var res=rows.reduce(function(s,e){ return s+reste(e); },0);
-  var f=S.filters;
+  var tot=somme(rows,montant), pay=somme(rows,paye), res=somme(rows,reste);
+  var vivants=rows.filter(function(e){ return reste(e)>0; });
+  var retard=rows.filter(function(e){ return statut(e)==="En retard"; });
+  var trente=rows.filter(function(e){ var d=days(e.dateEcheance); return reste(e)>0 && d!==null && d>=0 && d<=30; });
+  var f=S.filters, actifs=filtresActifs(), libs=libFiltres();
   var statuts=["Brouillon","En cours d'ouverture","En attente de BL","À venir","Échéance proche","En retard","Partiellement réglé","Soldé","Soldé avec retard"];
-  var body="", curM=null;
-  if(!rows.length) body='<tr><td colspan="9"><div class="empty"><strong>Aucun engagement ne correspond</strong>Modifiez les filtres, saisissez un engagement ou reprenez votre fichier Excel.</div></td></tr>';
+  var NC=11, body="", curM=null;
+  if(!rows.length) body='<tr><td colspan="'+NC+'"><div class="empty"><strong>Aucune échéance ne correspond</strong>'+
+    (actifs.length?'Élargissez les filtres ou réinitialisez-les.':'Saisissez un engagement ou reprenez votre fichier Excel.')+'</div></td></tr>';
   rows.forEach(function(e){
     var m=mois(e.dateEcheance);
     if(m!==curM){
       curM=m;
       var grp=rows.filter(function(x){ return mois(x.dateEcheance)===m; });
-      body+='<tr class="monthband"><td colspan="5">'+esc(moisLabel(m))+' — '+grp.length+' échéance'+(grp.length>1?'s':'')+'</td>'+
-        '<td class="r mono">'+num(grp.reduce(function(s,x){ return s+(Number(x.montantXof)||0); },0))+'</td>'+
-        '<td class="r mono">'+num(grp.reduce(function(s,x){ return s+reste(x); },0))+'</td><td colspan="2"></td></tr>';
+      body+='<tr class="monthband"><td colspan="6">'+esc(moisLabel(m))+'<span class="nb">'+grp.length+' échéance'+(grp.length>1?'s':'')+'</span></td>'+
+        '<td class="r mono">'+num(somme(grp,montant))+'</td><td class="r mono">'+n0(somme(grp,paye))+'</td>'+
+        '<td class="r mono">'+num(somme(grp,reste))+'</td><td colspan="2"></td></tr>';
     }
-    var st=statut(e);
-    body+='<tr data-eng="'+esc(e.id)+'" style="cursor:pointer">'+
-      '<td class="rowline" style="border-left-color:'+statutColor(st)+'">'+esc(e.entite||"—")+'</td>'+
+    var st=statut(e), p=pct(e), enDevise=e.devise && e.devise!=="XOF";
+    body+='<tr data-eng="'+esc(e.id)+'" class="ligne">'+
+      '<td class="rowline date" style="border-left-color:'+statutColor(st)+'"><b>'+dfr(e.dateEcheance)+'</b>'+echeanceHint(e)+'</td>'+
+      '<td class="entite">'+esc(e.entite||"—")+'</td>'+
       '<td>'+esc(e.contrepartie||"—")+'</td>'+
-      '<td>'+esc(e.fournisseur||"—")+'</td>'+
-      '<td class="op">'+esc(e.objet||"—")+(e.refCredit?'<small>'+esc(e.refCredit)+(e.rang?' · tranche '+esc(e.rang):"")+'</small>':"")+'</td>'+
-      '<td class="mono">'+dfr(e.dateEcheance)+'</td>'+
-      '<td class="r mono">'+num(e.montantXof)+'<small style="display:block;color:var(--ink-3);font-size:11px">'+num2(e.montantDevise)+' '+esc(e.devise||"")+'</small></td>'+
-      '<td class="r mono">'+(reste(e)?num(reste(e)):'—')+'</td>'+
-      '<td class="r mono">'+pct(e)+' %</td>'+
+      '<td class="op">'+esc(e.fournisseur||"—")+(e.refCredit?'<small>'+esc(e.refCredit)+(e.rang?' · tranche '+esc(e.rang):"")+'</small>':"")+'</td>'+
+      '<td class="op">'+esc(e.objet||"—")+'<small>'+esc(e.mode||"")+(e.intraGroupe?' · intra-groupe':'')+'</small></td>'+
+      '<td class="r mono">'+(enDevise ? esc(e.devise)+' '+num2(e.montantDevise)+'<small>taux '+esc(e.taux||"—")+'</small>' : '<span style="color:var(--ink-3)">XOF</span>')+'</td>'+
+      '<td class="r mono">'+num(montant(e))+'</td>'+
+      '<td class="r mono">'+n0(paye(e))+'</td>'+
+      '<td class="r mono reste"><b>'+(reste(e)?num(reste(e)):'—')+'</b></td>'+
+      '<td><div class="prog"><span class="bar"><i style="width:'+p+'%"></i></span><span class="pc">'+p+' %</span></div></td>'+
       '<td><span class="tag '+statutClass(st)+'">'+esc(st)+'</span></td></tr>';
   });
-  return '<div class="head"><div><h2>Échéancier</h2><p>'+rows.length+' échéances affichées · '+num(tot)+' FCFA engagés · '+num(res)+' FCFA restant dû.</p></div>'+
-    '<div class="inline"><button class="btn sec" id="exportCsv">Exporter en CSV</button><button class="btn" data-view="nouveau">Nouvel engagement</button></div></div>'+
+  var tauxTot=tot?Math.round(pay/tot*100):0;
+  return '<div class="head"><div><h2>Échéancier<span class="badge-date">Au '+dfr(today())+'</span></h2>'+
+      '<p>'+rows.length+' échéance'+(rows.length>1?'s':'')+' · engagements échéancés, brouillons '+(f.brouillon==="masquer"?"masqués":f.brouillon==="seuls"?"seulement":"inclus")+'. Cliquez une ligne pour ouvrir sa fiche.</p></div>'+
+      '<div class="inline">'+
+        '<button class="btn sec" id="exportCsv">CSV</button>'+
+        '<button class="btn sec" id="exportPdfEch">Exporter en PDF</button>'+
+        (peutEcrire("nouveau")?'<button class="btn" data-view="nouveau">Nouvel engagement</button>':'')+
+      '</div></div>'+
+    '<div class="grid g4" style="margin-bottom:12px">'+
+      kpiC("Engagé", md(tot), rows.length+" échéance"+(rows.length>1?"s":""), "")+
+      kpiC("Déjà réglé", md(pay), "taux de règlement "+pct1(part(pay,tot)), "vrt")+
+      kpiC("Reste à payer", md(res), vivants.length+" ligne"+(vivants.length>1?"s":"")+" vivante"+(vivants.length>1?"s":"")+" · "+md(somme(trente,reste))+" sous 30 j", "")+
+      kpiC("En retard", md(somme(retard,reste)), retard.length+" échéance"+(retard.length>1?"s":"")+" dépassée"+(retard.length>1?"s":""), retard.length?"rge":"")+
+    '</div>'+
     '<div class="panel"><div class="filters">'+
-      '<div><label>Recherche</label><input id="f_q" value="'+esc(f.q)+'" placeholder="objet, référence…"></div>'+
+      '<div class="large"><label>Recherche</label><input id="f_q" value="'+esc(f.q)+'" placeholder="objet, référence, fournisseur, banque…"></div>'+
       '<div><label>Entité</label><select id="f_entite"><option value="">Toutes</option>'+selOpts(S.ref.entites,f.entite)+'</select></div>'+
-      '<div><label>Contrepartie</label><select id="f_contrepartie"><option value="">Toutes</option>'+selOpts(S.ref.contreparties,f.contrepartie)+'</select></div>'+
+      '<div><label>Banque</label><select id="f_contrepartie"><option value="">Toutes</option>'+selOpts(S.ref.contreparties,f.contrepartie)+'</select></div>'+
       '<div><label>Fournisseur</label><select id="f_fournisseur"><option value="">Tous</option>'+selOpts(S.ref.fournisseurs,f.fournisseur)+'</select></div>'+
       '<div><label>Mode</label><select id="f_mode"><option value="">Tous</option>'+selOpts(S.ref.modes,f.mode)+'</select></div>'+
       '<div><label>Statut</label><select id="f_statut"><option value="">Tous</option>'+selOpts(statuts,f.statut)+'</select></div>'+
       '<div><label>Devise</label><select id="f_devise"><option value="">Toutes</option>'+selOpts(["XOF","EUR","USD"],f.devise)+'</select></div>'+
-      '<div><label>Du</label><input type="date" id="f_du" value="'+esc(f.du)+'"></div>'+
-      '<div><label>Au</label><input type="date" id="f_au" value="'+esc(f.au)+'"></div>'+
+      '<div class="large"><label>Échéance du — au</label><div style="display:flex;gap:6px">'+
+        '<input type="date" id="f_du" value="'+esc(f.du)+'" title="À partir du"><input type="date" id="f_au" value="'+esc(f.au)+'" title="Jusqu\'au"></div></div>'+
       '<div><label>Brouillons</label><select id="f_brouillon">'+
         '<option value="masquer"'+(f.brouillon==="masquer"?" selected":"")+'>Masqués</option>'+
         '<option value="inclure"'+(f.brouillon==="inclure"?" selected":"")+'>Inclus</option>'+
         '<option value="seuls"'+(f.brouillon==="seuls"?" selected":"")+'>Seulement</option></select></div>'+
-    '</div><div class="scroll"><table><thead><tr>'+
-      '<th>Entité</th><th>Contrepartie</th><th>Fournisseur</th><th>Opération</th><th>Échéance</th>'+
-      '<th class="r">Contre-valeur</th><th class="r">Reste à payer</th><th class="r">%</th><th>Statut</th>'+
-    '</tr></thead><tbody>'+body+'</tbody></table></div></div>';
+    '</div>'+
+    (actifs.length ? '<div class="filtres-actifs"><span class="lib">'+actifs.length+' filtre'+(actifs.length>1?'s':'')+' :</span>'+
+        libs.map(function(x){ return '<span class="chip">'+esc(x)+'</span>'; }).join("")+
+        '<button class="btn sec sm" id="f_reset" style="margin-left:auto">Réinitialiser</button></div>' : '')+
+    '<div class="scroll"><table class="ech"><thead><tr>'+
+      '<th>Échéance</th><th>Entité</th><th>Banque</th><th>Fournisseur · réf.</th><th>Opération · mode</th><th class="r">Devise</th>'+
+      '<th class="r">Contre-valeur</th><th class="r">Réglé</th><th class="r">Reste à payer</th><th>Progression</th><th>Statut</th>'+
+    '</tr></thead><tbody>'+body+'</tbody>'+
+    (rows.length ? '<tfoot><tr><td colspan="6">TOTAL<span class="nb" style="font-weight:500;color:var(--ink-2);margin-left:8px">'+rows.length+' échéance'+(rows.length>1?'s':'')+'</span></td>'+
+      '<td class="r mono">'+num(tot)+'</td><td class="r mono">'+n0(pay)+'</td><td class="r mono">'+num(res)+'</td>'+
+      '<td><div class="prog"><span class="bar"><i style="width:'+tauxTot+'%"></i></span><span class="pc">'+tauxTot+' %</span></div></td><td></td></tr></tfoot>' : '')+
+    '</table></div></div>';
 }
 
 /* ---------- fiche / drawer ---------- */
@@ -1903,20 +1990,32 @@ async function ouvrirPdf(titre, sousTitre, cartouche){
     opt=opt||{};
     // les cellules passent par nettoyer() dès ici, pour que la mesure des
     // largeurs par autoTable porte sur le texte réellement dessiné
+    // une cellule peut être une chaîne ou un objet autoTable ({content, colSpan…})
+    var cel=function(c, st){
+      var o=(c && typeof c==="object") ? Object.assign({}, c) : {content:c};
+      o.content=nettoyer(o.content); o.styles=Object.assign({}, st, o.styles||{}); return o;
+    };
     var body=lignes.map(function(l){
-      if(l && l.tot)   return l.v.map(function(c){ return {content:nettoyer(c), styles:{fontStyle:"bold", fillColor:K.navy, textColor:[255,255,255]}}; });
-      if(l && l.poids) return l.v.map(function(c){ return {content:nettoyer(c), styles:{fillColor:K.fond, textColor:K.gris, fontStyle:"bold", fontSize:6.6}}; });
+      if(l && l.tot)   return l.v.map(function(c){ return cel(c, {fontStyle:"bold", fillColor:K.navy, textColor:[255,255,255]}); });
+      if(l && l.bande) return l.v.map(function(c){ return cel(c, {fontStyle:"bold", fillColor:K.clair, textColor:K.navy, fontSize:6.6}); });
+      if(l && l.poids) return l.v.map(function(c){ return cel(c, {fillColor:K.fond, textColor:K.gris, fontStyle:"bold", fontSize:6.6}); });
       return l.map(nettoyer);
     });
+    // c.lb : la colonne passe à la ligne au lieu d'être tronquée par « … »
     var colStyles={};
-    cols.forEach(function(c,i){ colStyles[i]={halign:c.a||"left"}; if(c.w) colStyles[i].cellWidth=c.w; });
+    cols.forEach(function(c,i){
+      colStyles[i]={halign:c.a||"left"};
+      if(c.w) colStyles[i].cellWidth=c.w;
+      if(c.lb) colStyles[i].overflow="linebreak";
+    });
     d.autoTable({
       head:[cols.map(function(c){ return c.t; })], body:body, startY:K.y,
       margin:{ left:opt.gauche!=null?opt.gauche:K.M, right:opt.droite!=null?opt.droite:K.M, top:14, bottom:12 },
       tableWidth:opt.largeur||"auto",
       styles:{ font:"helvetica", fontSize:opt.taille||7.2, cellPadding:{top:1.5,bottom:1.5,left:1.8,right:1.8},
                textColor:K.encre, lineColor:K.ligne, lineWidth:0.15, overflow:"ellipsize", valign:"middle" },
-      headStyles:{ fillColor:K.navy, textColor:[255,255,255], fontStyle:"bold", fontSize:6.4, halign:"center", valign:"middle" },
+      // les en-têtes longs se replient sur deux lignes plutôt que d'être coupés
+      headStyles:{ fillColor:K.navy, textColor:[255,255,255], fontStyle:"bold", fontSize:6.4, halign:"center", valign:"middle", overflow:"linebreak" },
       alternateRowStyles:{ fillColor:[250,250,249] },
       columnStyles:colStyles,
       willDrawCell:function(c){
@@ -2101,6 +2200,53 @@ async function situationEntitePdf(ent){
   }
   K.note("Situation extraite du suivi des engagements du Groupe, calculée sur le reste à payer. Les dossiers sans échéance sont présentés à part et n'entrent pas dans l'échéancier.");
   await K.finir("situation-engagements-"+ent.replace(/[^A-Za-z0-9_-]+/g,"-")+"-"+today()+".pdf", "Situation PDF", ent, num(res)+" FCFA de reste à payer");
+}
+
+/* ---------- échéancier en PDF : la vue telle qu'elle est filtrée à l'écran ---------- */
+async function echeancierPdf(){
+  var rows=filtered();
+  if(!rows.length){ toast("Aucune échéance à exporter"); return; }
+  toast("Génération de l'échéancier…");
+  var tot=somme(rows,montant), pay=somme(rows,paye), res=somme(rows,reste);
+  var retard=rows.filter(function(e){ return statut(e)==="En retard"; });
+  var trente=rows.filter(function(e){ var d=days(e.dateEcheance); return reste(e)>0 && d!==null && d>=0 && d<=30; });
+  var filtres=libFiltres(), K;
+  try{
+    K=await ouvrirPdf("ÉCHÉANCIER DES ENGAGEMENTS",
+      (S.params.nomGroupe||"Groupe Toguna")+" · situation au "+dfr(today())+" · "+rows.length+" échéance"+(rows.length>1?"s":"")+
+      (filtres.length ? " · "+filtres.join(", ") : " · ensemble du portefeuille échéancé")+" · montants en FCFA",
+      "Échéancier des engagements");
+  }catch(err){ toast(err.message); return; }
+
+  K.tuiles([{k:"Engagé",v:num(tot)},{k:"Déjà réglé",v:num(pay)},{k:"Reste à payer",v:num(res)},{k:"Taux de règlement",v:pct1(part(pay,tot))},
+            {k:"En retard",v:num(somme(retard,reste)),rouge:retard.length>0},{k:"Sous 30 jours",v:num(somme(trente,reste))}]);
+
+  var lignes=[], curM=null;
+  rows.forEach(function(e){
+    var m=mois(e.dateEcheance);
+    if(m!==curM){
+      curM=m;
+      var grp=rows.filter(function(x){ return mois(x.dateEcheance)===m; });
+      lignes.push({bande:true, v:[{content:moisLabel(m)+"  —  "+grp.length+" échéance"+(grp.length>1?"s":""), colSpan:8},
+                                  num(somme(grp,montant)), n0(somme(grp,paye)), num(somme(grp,reste)), "", ""]});
+    }
+    var d=days(e.dateEcheance), st=statut(e);
+    lignes.push([dfr(e.dateEcheance)+(reste(e)>0 && d!==null && d<0 ? "\nretard "+(-d)+" j" : ""), e.entite||"", e.contrepartie||"", e.fournisseur||"",
+      (e.refCredit||"")+(e.rang?" · tr. "+e.rang:""), e.objet||"", e.mode||"",
+      (e.devise && e.devise!=="XOF") ? e.devise+" "+num2(e.montantDevise) : "XOF",
+      num(montant(e)), n0(paye(e)), reste(e)?num(reste(e)):"–", pct(e)+" %", st]);
+  });
+  lignes.push({tot:true, v:[{content:"TOTAL  —  "+rows.length+" échéance"+(rows.length>1?"s":""), colSpan:8}, num(tot), n0(pay), num(res), Math.round(part(pay,tot))+" %", ""]});
+
+  K.section("Échéances par mois", "(triées par date, reste à payer en gras)");
+  K.tableau([{t:"ÉCHÉANCE",w:22,lb:true},{t:"ENTITÉ",w:14},{t:"BANQUE",w:15},{t:"FOURNISSEUR",w:28,lb:true},{t:"RÉF. · TR.",w:22,lb:true},{t:"OPÉRATION",lb:true},
+             {t:"MODE",w:15},{t:"MONTANT DEVISE",a:"right",w:24},{t:"CONTRE-\nVALEUR",a:"right",w:22},{t:"RÉGLÉ",a:"right",w:22},
+             {t:"RESTE",a:"right",w:22},{t:"%",a:"right",w:10},{t:"STATUT",w:18,lb:true}],
+    lignes, {taille:6.4});
+  K.note("Échéancier extrait du suivi des engagements, trié par date d'échéance et regroupé par mois. Les dossiers sans échéance n'y figurent pas. "+
+    (filtres.length ? "Filtres appliqués : "+filtres.join(" ; ")+"." : "Aucun filtre appliqué."));
+  await K.finir("echeancier-"+today()+".pdf", "Échéancier PDF", rows.length+" lignes", num(res)+" FCFA de reste à payer");
+  toast("Échéancier exporté");
 }
 
 /* ---------- onglet Rapports : les trois livrables ---------- */
@@ -3061,6 +3207,8 @@ document.addEventListener("click", async function(ev){
     render(); return;
   }
   if(ev.target.id==="exportCsv"){ await exportCsv(); await logAudit("Export CSV", filtered().length+" lignes", ""); return; }
+  if(ev.target.id==="exportPdfEch"){ await echeancierPdf(); return; }
+  if(ev.target.id==="f_reset"){ S.filters=filtresParDefaut(); render(); return; }
   if(ev.target.id==="exportHisto"){ var hh=historiqueFiltre(); await exportCsv(hh); await logAudit("Export historique", hh.length+" lignes", ""); return; }
 });
 

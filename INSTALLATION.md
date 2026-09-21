@@ -116,6 +116,11 @@ Onglet **Tableau de bord → Rapports**. Trois livrables, calculés sur la situa
 | 2. Situation par entité | Service comptable de chaque entité | Un PDF par entité | Échéancier détaillé, par banque, par fournisseur, échéancier mensuel, attente de BL |
 | 3. Échéances à moins d'un mois | Direction et comptables | E-mail, chaque lundi 07:00 | Tableau des échéances à venir sous l'horizon réglé, une situation par destinataire |
 
+**L'échéancier lui-même s'exporte en PDF** (module Échéancier → *Exporter en PDF*) : le
+document reprend exactement la vue à l'écran — filtres appliqués rappelés dans le cartouche,
+indicateurs, lignes regroupées par mois avec sous-totaux, total général. Filtrer d'abord sur
+une entité, une banque ou un statut donne un échéancier ciblé prêt à transmettre.
+
 **Convention des rapports** : les analyses croisées portent sur les engagements échéancés ;
 les dossiers sans échéance (en cours d'ouverture, attente de BL) sont présentés à part et
 n'entrent pas dans les totaux échéancés. Toutes les répartitions sont calculées sur le reste
