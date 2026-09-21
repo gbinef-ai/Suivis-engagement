@@ -6,6 +6,12 @@
 # securite de la base
 supabase
 
+# Ni les engagements livres : depuis le passage a Supabase, les donnees
+# viennent de la base, derriere authentification. Servir ce fichier les
+# rendrait lisibles sans compte, ce qui viderait de son sens tout le
+# controle d'acces. Il reste dans le depot pour un rechargement.
+donnees
+
 # Ni l'historique et la configuration git
 .git
 .gitattributes
