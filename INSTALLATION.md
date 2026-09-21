@@ -1,107 +1,105 @@
-# Installation et déploiement — Engagements & trésorerie
+# Installation et déploiement — Engagements & trésorerie (branche `vercel`)
 
-Application de suivi des engagements du Groupe Toguna, sur Firebase Hosting et Cloud Firestore.
-Durée totale : environ une heure, dont une quarantaine de minutes d'attente et d'installation.
+Application de suivi des engagements du Groupe Toguna, hébergée sur Vercel comme site statique.
+Durée du déploiement : quelques minutes, sans installation d'outils sur votre poste.
+
+## Ce que cette branche change
+
+Firebase a été retiré : plus de Cloud Firestore, plus de connexion Google, plus de
+`firebase deploy`. L'application fonctionne en **mode autonome** — les données vivent dans le
+stockage local du navigateur qui l'ouvre.
+
+**À lire avant de déployer.** Cette architecture a une conséquence directe :
+
+| | Branche `main` (Firebase) | Branche `vercel` |
+| --- | --- | --- |
+| Hébergement | Firebase Hosting | Vercel |
+| Données | Cloud Firestore, partagées | Stockage du navigateur, par poste |
+| Accès | Connexion Google, liste d'autorisés | Ouvert à qui a l'adresse |
+| Travail à plusieurs | Oui, en temps réel | **Non** |
+| Habilitations | Trois rôles appliqués | Tous droits pour chacun |
+| Perte de données | Sauvegarde Firestore | Vider le cache du navigateur efface tout |
+
+Autrement dit : chaque personne qui ouvre l'application a sa propre copie des données, et
+personne ne voit les saisies des autres. Si les trois collaborateurs doivent partager le même
+échéancier, c'est la branche `main` qu'il faut déployer, pas celle-ci.
+
+Cette branche convient pour : une consultation individuelle, une démonstration, un poste de
+travail unique, ou une mise en ligne rapide sans configuration.
 
 ## Contenu du dossier
 
 | Fichier | Rôle |
 | --- | --- |
 | `index.html` | L'application complète. Ne rien y modifier. |
-| `firebase-config.js` | **À remplir** : les identifiants de votre projet Firebase. |
-| `firestore.rules` | **À remplir** : les adresses e-mail autorisées. |
-| `firebase.json` | Paramètres d'hébergement. À laisser tel quel. |
-| `.firebaserc` | **À remplir** : l'identifiant de votre projet. |
+| `vercel.json` | Paramètres d'hébergement. À laisser tel quel. |
 | `donnees/engagements-toguna.json` | Vos 246 engagements, référentiels et taux. |
-| `outils/import-firestore.mjs` | Script d'import des données. |
 
----
+## Étape 1 — Déployer
 
-## Étape 1 — Remplir la configuration
+1. Ouvrez [vercel.com](https://vercel.com) et connectez-vous avec votre compte GitHub.
+2. **Add New** → **Project**, puis importez le dépôt `gbinef-ai/Suivis-engagement`.
+3. Dans **Framework Preset**, laissez **Other**. Ne renseignez ni commande de build ni dossier
+   de sortie : le site est déjà statique.
+4. Dans les réglages du projet, section **Git**, choisissez `vercel` comme **Production Branch**.
+5. **Deploy**.
 
-Dans la console Firebase : **Paramètres du projet** → section **Vos applications** → votre application web.
-Copiez les valeurs du bloc `firebaseConfig` affiché et reportez-les dans `firebase-config.js`, à la place des `A_REMPLACER`.
+Vercel affiche à la fin une adresse de la forme `https://suivis-engagement.vercel.app`.
 
-Dans le même fichier, renseignez votre adresse e-mail dans `ADMINS`.
+Aucune clé, aucun jeton, aucune variable d'environnement n'est à fournir : l'application
+n'appelle aucun service extérieur.
 
-Ouvrez ensuite `.firebaserc` et remplacez `A_REMPLACER_PAR_VOTRE_PROJECT_ID` par la valeur de `projectId`.
+## Étape 2 — Vérifier
 
-## Étape 2 — Déclarer les personnes autorisées
+1. Ouvrez l'adresse affichée. Le tableau de bord s'affiche directement, sans écran de connexion.
+2. Au premier chargement, l'application lit `donnees/engagements-toguna.json` et enregistre son
+   contenu dans le navigateur. Le bandeau de gauche indique **mode autonome**.
+3. Vérifiez les totaux : **246 engagements, 207 060 412 249 FCFA**.
+4. Onglet Échéancier : 149 lignes vivantes.
+5. Onglet En instance : 39 dossiers, dont 20 en négociation fournisseur.
+6. Onglet Historique : 97 engagements soldés.
 
-Ouvrez `firestore.rules` et remplissez deux listes :
+Cet amorçage n'a lieu qu'une fois par navigateur. Les modifications que vous saisissez ensuite ne
+sont jamais écrasées par le fichier livré, et un engagement supprimé ne réapparaît pas.
 
-- `utilisateurs()` — toutes les adresses e-mail qui peuvent ouvrir l'application, la vôtre et celles de vos deux collaborateurs ;
-- `administrateurs()` — celles qui peuvent modifier les habilitations et restaurer une sauvegarde, en principe la vôtre seule.
+## Sauvegardes — le point le plus important
 
-Les adresses doivent être en minuscules et correspondre exactement aux comptes Google utilisés pour se connecter.
+En mode autonome, vider le cache du navigateur, changer de poste ou réinitialiser le profil
+efface les données. La sauvegarde est la seule protection.
 
-Pour ajouter quelqu'un plus tard : ajoutez son adresse dans `utilisateurs()`, puis relancez `firebase deploy --only firestore:rules`.
+Chaque semaine, au minimum : onglet **Référentiels** → **Télécharger la sauvegarde**, et rangez le
+fichier hors de l'application.
 
-## Étape 3 — Installer les outils
-
-Installez Node.js depuis `nodejs.org` (version LTS), puis, dans un terminal :
-
-```
-npm install -g firebase-tools
-firebase login
-```
-
-La commande `firebase login` ouvre le navigateur : connectez-vous avec le compte Google propriétaire du projet.
-
-## Étape 4 — Importer les 246 engagements
-
-Dans la console Firebase : **Paramètres du projet** → onglet **Comptes de service** → **Générer une nouvelle clé privée**. Un fichier JSON se télécharge.
-
-Renommez-le `cle-service.json` et placez-le dans le dossier `outils/`, puis :
-
-```
-cd outils
-npm install
-node import-firestore.mjs
-```
-
-Le script affiche chaque période importée avec son nombre de lignes et son montant, et se termine sur le total : **246 engagements, 207 060 412 249 FCFA**. Vérifiez dans la console, section **Firestore Database**, que la collection `engagements` contient bien 28 documents.
-
-> **Important** : `cle-service.json` donne un accès complet à votre base. Ne le mettez jamais en ligne, ne l'envoyez à personne, et supprimez-le après l'import.
-
-## Étape 5 — Déployer
-
-Revenez à la racine du dossier, puis :
-
-```
-firebase deploy
-```
-
-La commande publie l'application et les règles de sécurité. Elle affiche à la fin l'adresse de votre application, de la forme `https://votre-projet.web.app`.
-
-Pour ne déployer que les règles après une modification : `firebase deploy --only firestore:rules`.
-Pour ne déployer que l'application : `firebase deploy --only hosting`.
-
-## Étape 6 — Vérifier
-
-1. Ouvrez l'adresse affichée. L'écran de connexion apparaît avec le logo du Groupe.
-2. Connectez-vous avec votre compte Google. Le tableau de bord doit s'afficher avec vos encours.
-3. Vérifiez l'onglet Échéancier : 149 lignes vivantes.
-4. Vérifiez l'onglet En instance : 39 dossiers, dont 20 en négociation fournisseur.
-5. Vérifiez l'onglet Historique : 97 engagements soldés.
-6. Faites saisir un règlement à un collaborateur, puis vérifiez qu'il apparaît à votre écran et dans le Journal.
-
-Si la connexion est refusée avec un message de permissions, c'est presque toujours une adresse absente de `utilisateurs()` dans `firestore.rules`, ou une casse différente.
-
----
-
-## Nom de domaine du Groupe
-
-Pour une adresse du type `engagements.groupetoguna.com` : console Firebase → **Hosting** → **Ajouter un domaine personnalisé**. Firebase indique alors deux enregistrements DNS à créer chez votre hébergeur de domaine, et fournit le certificat HTTPS automatiquement.
-
-## Coût
-
-Le plan gratuit Spark suffit : 10 Go d'hébergement, 360 Mo de transfert par jour, 1 Gio de données, 50 000 lectures et 20 000 écritures par jour, authentification gratuite. À trois utilisateurs, une ouverture de l'application consomme une trentaine de lectures ; vous resterez très en deçà des plafonds. Aucun moyen de paiement n'est demandé.
-
-## Sauvegardes
-
-Le plan gratuit ne comprend pas de sauvegarde automatique. Conservez le rythme prévu : chaque semaine, onglet **Référentiels** → **Télécharger la sauvegarde**, et rangez le fichier hors de l'application. C'est aussi lui qui permettrait de reconstruire la base ailleurs en cas de besoin.
+Pour repartir d'une sauvegarde : onglet **Référentiels** → section **Restaurer une sauvegarde**,
+collez le contenu du fichier, puis **Restaurer**. La restauration remplace intégralement le
+contenu présent.
 
 ## Mises à jour
 
-Pour toute évolution de l'application, il suffira de remplacer `index.html` et de relancer `firebase deploy --only hosting`. Les données ne sont pas touchées.
+Toute modification poussée sur la branche `vercel` est déployée automatiquement par Vercel.
+Les données enregistrées dans les navigateurs ne sont pas touchées.
+
+## Nom de domaine du Groupe
+
+Pour une adresse du type `engagements.groupetoguna.com` : tableau de bord Vercel → projet →
+**Settings** → **Domains** → **Add**. Vercel indique l'enregistrement DNS à créer chez votre
+hébergeur de domaine et fournit le certificat HTTPS automatiquement.
+
+## Accès
+
+Le site est public : toute personne connaissant l'adresse voit l'application. Elle ne voit
+cependant que les données de son propre navigateur, jamais les vôtres — le fichier livré est en
+revanche lisible par tous.
+
+Pour restreindre l'accès, deux possibilités côté Vercel : **Settings** → **Deployment
+Protection** → **Vercel Authentication**, qui limite l'accès aux membres de votre équipe Vercel,
+ou **Password Protection**, sur les offres payantes.
+
+Si le contenu des 246 engagements ne doit pas être exposé publiquement, préférez la branche
+`main` et son hébergement Firebase avec connexion Google.
+
+## Coût
+
+Le plan gratuit Hobby de Vercel suffit largement : 100 Go de transfert par mois pour un site de
+175 Ko. Aucun moyen de paiement n'est demandé. Ce plan est réservé à un usage non commercial ;
+pour un usage professionnel, Vercel demande le plan Pro.
