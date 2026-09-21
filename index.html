@@ -185,30 +185,44 @@ main{flex:1;min-width:0;padding:18px 22px 60px;max-width:1560px;width:100%}
 .jauge .pc{font-variant-numeric:tabular-nums;min-width:46px;text-align:right;font-size:11.5px}
 
 /* ---------- échéancier ---------- */
-.kpi.compact{padding:9px 12px}
-.kpi.compact .k{margin-bottom:4px}
-.kpi.compact .v{font-size:19px}
+.kpi.compact{padding:8px 12px}
+.kpi.compact .k{margin-bottom:3px;font-size:10px}
+.kpi.compact .v{font-size:17px}
+.kpi.compact .d{font-size:11px}
 .filters .large{grid-column:span 2}
+/* champ de recherche : loupe à gauche, suggestions par datalist */
+.loupe{position:relative}
+.loupe svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:13px;height:13px;stroke:var(--ink-3);fill:none;stroke-width:2;stroke-linecap:round;pointer-events:none}
+.loupe input{padding-left:26px;width:100%}
+.loupe input:focus+svg,.loupe input:focus~svg{stroke:var(--green)}
+table.ech th{font-size:10px;letter-spacing:.02em;text-transform:uppercase;padding:7px 8px}
+table.ech td{padding:5px 8px;font-size:11.5px}
+table.ech td.op{font-size:11.5px}
+table.ech td.op small{font-size:10.5px}
+table.ech .tag{font-size:10.5px;padding:1px 6px}
+table.ech td.date small{font-size:10px}
+table.ech td.mono small{font-size:10px}
+table.ech .monthband td{font-size:11.5px;padding:5px 8px}
+table.ech tfoot td{font-size:11.5px;padding:7px 8px}
+.prog .pc{font-size:10.5px}
 .filtres-actifs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:7px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-2)}
 .filtres-actifs .lib{margin-right:2px}
 .chip{display:inline-block;background:var(--blue-2);color:var(--blue);border:1px solid var(--blue);border-radius:999px;padding:1px 8px;font-size:11.5px;white-space:nowrap}
-table.ech th{font-size:10.5px;letter-spacing:.02em;text-transform:uppercase;padding:8px 9px}
-table.ech td{padding:6px 9px;font-size:12.5px}
 table.ech tr.ligne{cursor:pointer}
 table.ech tr.ligne:hover td{background:var(--blue-2)}
 table.ech td.date b{display:block;font-variant-numeric:tabular-nums}
-table.ech td.date small{display:block;font-size:10.5px;color:var(--ink-3);margin-top:1px}
+table.ech td.date small{display:block;color:var(--ink-3);margin-top:1px}
 table.ech td.date small.retard{color:var(--red);font-weight:700}
 table.ech td.date small.proche{color:var(--amber);font-weight:700}
-table.ech td.mono small{display:block;font-size:10.5px;color:var(--ink-3);margin-top:1px}
+table.ech td.mono small{display:block;color:var(--ink-3);margin-top:1px}
 table.ech td.entite{font-weight:600}
 table.ech td.reste b{font-weight:700}
-table.ech .monthband td{background:var(--blue-2);color:var(--ink);font-size:12px;border-top:1px solid var(--line-strong);border-bottom:1px solid var(--line-strong)}
+table.ech .monthband td{background:var(--blue-2);color:var(--ink);border-top:1px solid var(--line-strong);border-bottom:1px solid var(--line-strong)}
 table.ech .monthband .nb{font-weight:500;color:var(--ink-2);font-size:11.5px;margin-left:8px}
-table.ech tfoot td{font-weight:700;background:var(--surface-2);border-top:2px solid var(--line-strong);padding:8px 9px;font-size:12.5px}
+table.ech tfoot td{font-weight:700;background:var(--surface-2);border-top:2px solid var(--line-strong)}
 .prog{display:flex;align-items:center;gap:6px;min-width:100px}
 .prog .bar{flex:1;min-width:48px}
-.prog .pc{font-size:11px;font-variant-numeric:tabular-nums;min-width:36px;text-align:right;color:var(--ink-2)}
+.prog .pc{font-variant-numeric:tabular-nums;min-width:36px;text-align:right;color:var(--ink-2)}
 
 /* ---------- blocks ---------- */
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
@@ -1407,25 +1421,26 @@ function vDashboard(){
 function estSolde(e){ return statut(e).indexOf("Soldé")===0; }
 function soldes(){ return S.eng.filter(estSolde); }
 function dateSolde(e){ return dernierReglement(e) || e.dateEcheance || ""; }
+/* Comparaison souple : sans casse ni accents, sur une partie du texte. Taper
+   « sino » retient SINOTRUK ; « credoc » retient CRÉDOC. */
+function normTxt(s){ return String(s==null?"":s).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,""); }
+function contient(h,q){ return normTxt(h).indexOf(normTxt(q).trim())>=0; }
 function filtered(){
-  var f=S.filters, q=f.q.toLowerCase();
+  var f=S.filters, q=(f.q||"").trim();
   return S.eng.filter(function(e){
     if(estSolde(e) && f.statut.indexOf("Soldé")!==0) return false;
     if(!e.dateEcheance) return false;
     if(f.brouillon==="masquer" && e.brouillon) return false;
     if(f.brouillon==="seuls" && !e.brouillon) return false;
-    if(f.entite && e.entite!==f.entite) return false;
-    if(f.contrepartie && e.contrepartie!==f.contrepartie) return false;
-    if(f.fournisseur && e.fournisseur!==f.fournisseur) return false;
-    if(f.mode && e.mode!==f.mode) return false;
+    if(f.entite && !contient(e.entite, f.entite)) return false;
+    if(f.contrepartie && !contient(e.contrepartie, f.contrepartie)) return false;
+    if(f.fournisseur && !contient(e.fournisseur, f.fournisseur)) return false;
+    if(f.mode && !contient(e.mode, f.mode)) return false;
     if(f.devise && e.devise!==f.devise) return false;
     if(f.statut && statut(e)!==f.statut) return false;
     if(f.du && (!e.dateEcheance || e.dateEcheance<f.du)) return false;
     if(f.au && (!e.dateEcheance || e.dateEcheance>f.au)) return false;
-    if(q){
-      var h=[e.objet,e.refCredit,e.fournisseur,e.contrepartie,e.entite,e.observations].join(" ").toLowerCase();
-      if(h.indexOf(q)<0) return false;
-    }
+    if(q && !contient([e.objet,e.refCredit,e.fournisseur,e.contrepartie,e.entite,e.observations].join(" "), q)) return false;
     return true;
   });
 }
@@ -1467,14 +1482,48 @@ function kpiC(k,v,d,cls){
   return '<div class="kpi compact '+(cls||"")+'"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'<small>FCFA</small></div><div class="d"><span>'+esc(d)+'</span></div></div>';
 }
 
-function vEcheancier(){
+var ICONE_LOUPE='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>';
+/* Champ de filtre avec loupe : on y tape librement, les valeurs connues sont
+   proposées en suggestion. La comparaison est souple (voir contient()). */
+function champLoupe(id, label, val, liste, placeholder, cls){
+  return '<div'+(cls?' class="'+cls+'"':'')+'><label for="'+id+'">'+esc(label)+'</label><div class="loupe">'+
+    '<input type="text" id="'+id+'"'+(liste?' list="dl_'+id+'"':'')+' value="'+esc(val)+'" placeholder="'+esc(placeholder||"")+'" autocomplete="off" spellcheck="false">'+ICONE_LOUPE+
+    (liste ? '<datalist id="dl_'+id+'">'+liste.map(function(o){ return '<option value="'+esc(o)+'">'; }).join("")+'</datalist>' : '')+
+    '</div></div>';
+}
+function nbEcheancier(rows){
+  var f=S.filters;
+  return rows.length+' échéance'+(rows.length>1?'s':'')+' · engagements échéancés, brouillons '+
+    (f.brouillon==="masquer"?"masqués":f.brouillon==="seuls"?"seulement":"inclus")+'. Cliquez une ligne pour ouvrir sa fiche.';
+}
+function vEcheancierFiltres(){
+  var f=S.filters;
+  var statuts=["Brouillon","En cours d'ouverture","En attente de BL","À venir","Échéance proche","En retard","Partiellement réglé","Soldé","Soldé avec retard"];
+  return '<div class="filters" id="ech_filtres">'+
+    champLoupe("f_q","Recherche",f.q,null,"objet, référence, observation…","large")+
+    champLoupe("f_entite","Entité",f.entite,S.ref.entites,"Toutes")+
+    champLoupe("f_contrepartie","Banque",f.contrepartie,S.ref.contreparties,"Toutes")+
+    champLoupe("f_fournisseur","Fournisseur",f.fournisseur,S.ref.fournisseurs,"Tous")+
+    champLoupe("f_mode","Mode",f.mode,S.ref.modes,"Tous")+
+    '<div><label for="f_statut">Statut</label><select id="f_statut"><option value="">Tous</option>'+selOpts(statuts,f.statut)+'</select></div>'+
+    '<div><label for="f_devise">Devise</label><select id="f_devise"><option value="">Toutes</option>'+selOpts(["XOF","EUR","USD"],f.devise)+'</select></div>'+
+    '<div class="large"><label>Échéance du — au</label><div style="display:flex;gap:6px">'+
+      '<input type="date" id="f_du" value="'+esc(f.du)+'" title="À partir du"><input type="date" id="f_au" value="'+esc(f.au)+'" title="Jusqu\'au"></div></div>'+
+    '<div><label for="f_brouillon">Brouillons</label><select id="f_brouillon">'+
+      '<option value="masquer"'+(f.brouillon==="masquer"?" selected":"")+'>Masqués</option>'+
+      '<option value="inclure"'+(f.brouillon==="inclure"?" selected":"")+'>Inclus</option>'+
+      '<option value="seuls"'+(f.brouillon==="seuls"?" selected":"")+'>Seulement</option></select></div>'+
+  '</div>';
+}
+/* Tout ce qui dépend des filtres : indicateurs, rappel des filtres, tableau.
+   Rendu seul à chaque frappe, pour ne pas reconstruire les champs de saisie. */
+function vEcheancierCorps(){
   var rows=filtered();
   var tot=somme(rows,montant), pay=somme(rows,paye), res=somme(rows,reste);
   var vivants=rows.filter(function(e){ return reste(e)>0; });
   var retard=rows.filter(function(e){ return statut(e)==="En retard"; });
   var trente=rows.filter(function(e){ var d=days(e.dateEcheance); return reste(e)>0 && d!==null && d>=0 && d<=30; });
-  var f=S.filters, actifs=filtresActifs(), libs=libFiltres();
-  var statuts=["Brouillon","En cours d'ouverture","En attente de BL","À venir","Échéance proche","En retard","Partiellement réglé","Soldé","Soldé avec retard"];
+  var actifs=filtresActifs(), libs=libFiltres();
   var NC=11, body="", curM=null;
   if(!rows.length) body='<tr><td colspan="'+NC+'"><div class="empty"><strong>Aucune échéance ne correspond</strong>'+
     (actifs.length?'Élargissez les filtres ou réinitialisez-les.':'Saisissez un engagement ou reprenez votre fichier Excel.')+'</div></td></tr>';
@@ -1502,34 +1551,13 @@ function vEcheancier(){
       '<td><span class="tag '+statutClass(st)+'">'+esc(st)+'</span></td></tr>';
   });
   var tauxTot=tot?Math.round(pay/tot*100):0;
-  return '<div class="head"><div><h2>Échéancier<span class="badge-date">Au '+dfr(today())+'</span></h2>'+
-      '<p>'+rows.length+' échéance'+(rows.length>1?'s':'')+' · engagements échéancés, brouillons '+(f.brouillon==="masquer"?"masqués":f.brouillon==="seuls"?"seulement":"inclus")+'. Cliquez une ligne pour ouvrir sa fiche.</p></div>'+
-      '<div class="inline">'+
-        '<button class="btn sec" id="exportCsv">CSV</button>'+
-        '<button class="btn sec" id="exportPdfEch">Exporter en PDF</button>'+
-        (peutEcrire("nouveau")?'<button class="btn" data-view="nouveau">Nouvel engagement</button>':'')+
-      '</div></div>'+
-    '<div class="grid g4" style="margin-bottom:12px">'+
+  return '<div class="grid g4" style="margin:12px 0">'+
       kpiC("Engagé", md(tot), rows.length+" échéance"+(rows.length>1?"s":""), "")+
       kpiC("Déjà réglé", md(pay), "taux de règlement "+pct1(part(pay,tot)), "vrt")+
       kpiC("Reste à payer", md(res), vivants.length+" ligne"+(vivants.length>1?"s":"")+" vivante"+(vivants.length>1?"s":"")+" · "+md(somme(trente,reste))+" sous 30 j", "")+
       kpiC("En retard", md(somme(retard,reste)), retard.length+" échéance"+(retard.length>1?"s":"")+" dépassée"+(retard.length>1?"s":""), retard.length?"rge":"")+
     '</div>'+
-    '<div class="panel"><div class="filters">'+
-      '<div class="large"><label>Recherche</label><input id="f_q" value="'+esc(f.q)+'" placeholder="objet, référence, fournisseur, banque…"></div>'+
-      '<div><label>Entité</label><select id="f_entite"><option value="">Toutes</option>'+selOpts(S.ref.entites,f.entite)+'</select></div>'+
-      '<div><label>Banque</label><select id="f_contrepartie"><option value="">Toutes</option>'+selOpts(S.ref.contreparties,f.contrepartie)+'</select></div>'+
-      '<div><label>Fournisseur</label><select id="f_fournisseur"><option value="">Tous</option>'+selOpts(S.ref.fournisseurs,f.fournisseur)+'</select></div>'+
-      '<div><label>Mode</label><select id="f_mode"><option value="">Tous</option>'+selOpts(S.ref.modes,f.mode)+'</select></div>'+
-      '<div><label>Statut</label><select id="f_statut"><option value="">Tous</option>'+selOpts(statuts,f.statut)+'</select></div>'+
-      '<div><label>Devise</label><select id="f_devise"><option value="">Toutes</option>'+selOpts(["XOF","EUR","USD"],f.devise)+'</select></div>'+
-      '<div class="large"><label>Échéance du — au</label><div style="display:flex;gap:6px">'+
-        '<input type="date" id="f_du" value="'+esc(f.du)+'" title="À partir du"><input type="date" id="f_au" value="'+esc(f.au)+'" title="Jusqu\'au"></div></div>'+
-      '<div><label>Brouillons</label><select id="f_brouillon">'+
-        '<option value="masquer"'+(f.brouillon==="masquer"?" selected":"")+'>Masqués</option>'+
-        '<option value="inclure"'+(f.brouillon==="inclure"?" selected":"")+'>Inclus</option>'+
-        '<option value="seuls"'+(f.brouillon==="seuls"?" selected":"")+'>Seulement</option></select></div>'+
-    '</div>'+
+    '<div class="panel">'+
     (actifs.length ? '<div class="filtres-actifs"><span class="lib">'+actifs.length+' filtre'+(actifs.length>1?'s':'')+' :</span>'+
         libs.map(function(x){ return '<span class="chip">'+esc(x)+'</span>'; }).join("")+
         '<button class="btn sec sm" id="f_reset" style="margin-left:auto">Réinitialiser</button></div>' : '')+
@@ -1541,6 +1569,17 @@ function vEcheancier(){
       '<td class="r mono">'+num(tot)+'</td><td class="r mono">'+n0(pay)+'</td><td class="r mono">'+num(res)+'</td>'+
       '<td><div class="prog"><span class="bar"><i style="width:'+tauxTot+'%"></i></span><span class="pc">'+tauxTot+' %</span></div></td><td></td></tr></tfoot>' : '')+
     '</table></div></div>';
+}
+function vEcheancier(){
+  return '<div class="head"><div><h2>Échéancier<span class="badge-date">Au '+dfr(today())+'</span></h2>'+
+      '<p id="ech_nb">'+nbEcheancier(filtered())+'</p></div>'+
+      '<div class="inline">'+
+        '<button class="btn sec" id="exportCsv">CSV</button>'+
+        '<button class="btn sec" id="exportPdfEch">Exporter en PDF</button>'+
+        (peutEcrire("nouveau")?'<button class="btn" data-view="nouveau">Nouvel engagement</button>':'')+
+      '</div></div>'+
+    '<div class="panel">'+vEcheancierFiltres()+'</div>'+
+    '<div id="ech_corps">'+vEcheancierCorps()+'</div>';
 }
 
 /* ---------- fiche / drawer ---------- */
@@ -3291,6 +3330,10 @@ document.addEventListener("input", function(ev){
   }
   if(id.indexOf("f_")===0){
     S.filters[id.slice(2)]=ev.target.value;
+    // seul le corps se recalcule : les champs restent en place, le curseur et
+    // les suggestions avec eux
+    var zc=$("ech_corps");
+    if(zc){ zc.innerHTML=vEcheancierCorps(); var nb=$("ech_nb"); if(nb) nb.textContent=nbEcheancier(filtered()); return; }
     var m=$("main"); var sc=m.scrollTop;
     m.innerHTML=vEcheancier(); m.scrollTop=sc;
     var el=$(id); if(el && el.type==="text"){ el.focus(); el.setSelectionRange(el.value.length,el.value.length); }
