@@ -106,6 +106,52 @@ que les politiques autorisent, une fois la personne authentifiée. N'y mettez ja
 Si les valeurs restent à `A_REMPLACER`, l'application démarre en mode autonome : données
 dans le navigateur, sans authentification ni partage. Le pied du bandeau l'indique.
 
+## Livrables : rapports et envoi hebdomadaire
+
+Onglet **Tableau de bord → Rapports**. Trois livrables, calculés sur la situation du jour.
+
+| Livrable | Destinataire | Forme | Contenu |
+| --- | --- | --- | --- |
+| 1. Analyse croisée | Direction générale | PDF paysage, 5 pages | Les neuf sections du modèle de la Direction Financière et la lecture de l'analyse |
+| 2. Situation par entité | Service comptable de chaque entité | Un PDF par entité | Échéancier détaillé, par banque, par fournisseur, échéancier mensuel, attente de BL |
+| 3. Échéances à moins d'un mois | Direction et comptables | E-mail, chaque lundi 07:00 | Tableau des échéances à venir sous l'horizon réglé, une situation par destinataire |
+
+**Convention des rapports** : les analyses croisées portent sur les engagements échéancés ;
+les dossiers sans échéance (en cours d'ouverture, attente de BL) sont présentés à part et
+n'entrent pas dans les totaux échéancés. Toutes les répartitions sont calculées sur le reste
+à payer.
+
+### L'envoi hebdomadaire
+
+Il s'exécute sur le serveur : une tâche `pg_cron` appelle chaque lundi à 07:00 UTC — l'heure
+de Bamako — la fonction Edge `envoi-hebdo`, qui lit les engagements, compose un message par
+destinataire et l'envoie. Chaque destinataire reçoit **sa** situation : tout le Groupe pour la
+direction, une seule entité pour son comptable. Le tableau est dans le message, lisible sur
+téléphone, avec un lien vers l'application.
+
+Depuis l'onglet Rapports, le trésorier gère les destinataires (adresse, nom, périmètre,
+actif), l'horizon en jours et l'inclusion des retards, consulte un **aperçu** du message,
+déclenche un **envoi immédiat**, et lit le journal des derniers envois.
+
+**Fournisseur d'e-mail.** La fonction envoie par [Resend](https://resend.com). Tant que sa
+clé n'est pas renseignée, l'envoi ne part pas : la tentative est journalisée avec le statut
+*Fournisseur d'e-mail non configuré*, sans erreur silencieuse. Pour l'activer :
+
+1. Créez un compte Resend, puis dans **Domains** ajoutez `groupetoguna.com` et créez chez
+   votre hébergeur DNS les enregistrements indiqués. Sans domaine vérifié, Resend n'accepte
+   d'envoyer qu'à l'adresse du titulaire du compte, depuis `onboarding@resend.dev`.
+2. Dans **API Keys**, créez une clé.
+3. Dans Supabase : **Edge Functions → envoi-hebdo → Secrets**, ajoutez `RESEND_API_KEY` avec
+   cette clé, et remplacez `EMAIL_FROM` par l'expéditeur souhaité, par exemple
+   `Trésorerie Groupe Toguna <tresorerie@groupetoguna.com>`.
+
+Aucun redéploiement n'est nécessaire : la fonction lit ses secrets à chaque appel.
+
+**Fichiers** : `supabase/rapports.sql` (tables `destinataires`, `reglages_envoi`, `envois`,
+tâche planifiée) et `supabase/functions/envoi-hebdo/index.ts` (la fonction). Le secret partagé
+entre la tâche et la fonction est dans Vault sous le nom `cron_secret` ; il n'est jamais écrit
+dans le dépôt.
+
 ## Déploiement
 
 Le projet Vercel est `suivis-engagement`, branche de production `vercel`.
