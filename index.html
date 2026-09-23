@@ -2340,7 +2340,7 @@ async function echeancierPdf(){
   // Avec la colonne Commentaires, toutes les largeurs se resserrent : les
   // colonnes fixes doivent laisser au moins 38 mm à l'opération, sinon
   // autoTable l'écrase à quelques millimètres et le texte s'empile.
-  var W = obs ? {ech:17,ret:11,ent:12,bq:13,fo:22,ref:22,mode:13,dev:21,cv:20,reg:18,res:20,st:16,obs:30}
+  var W = obs ? {ech:17,ret:13,ent:12,bq:15,fo:22,ref:22,mode:13,dev:21,cv:20,reg:18,res:20,st:16,obs:26}
               : {ech:18,ret:14,ent:14,bq:15,fo:27,ref:27,mode:15,dev:24,cv:22,reg:22,res:22,st:18};
   K.tableau([{t:"ÉCHÉANCE",w:W.ech},{t:"RETARD",a:"right",w:W.ret},{t:"ENTITÉ",w:W.ent},{t:"BANQUE",w:W.bq},{t:"FOURNISSEUR",w:W.fo,lb:true},{t:"RÉF. · TR.",w:W.ref,lb:true},{t:"OPÉRATION",lb:true},
              {t:"MODE",w:W.mode},{t:"MONTANT DEVISE",a:"right",w:W.dev},{t:"CONTRE-\nVALEUR",a:"right",w:W.cv},{t:"RÉGLÉ",a:"right",w:W.reg},
