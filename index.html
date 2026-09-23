@@ -1836,44 +1836,76 @@ function vControles(){
 
 /* ---------- reprise Excel ---------- */
 /* Colonnes reconnues. Si la première ligne collée est un en-tête, chaque
-   colonne est repérée par son intitulé, dans n'importe quel ordre ; sinon
-   c'est l'ordre ci-dessous qui s'applique. Les intitulés sont comparés sans
-   accents ni casse. */
+   colonne est repérée par son intitulé, dans n'importe quel ordre ; les
+   colonnes non reconnues gardent leur position par défaut. La correspondance
+   se corrige à l'écran. Les intitulés sont comparés sans accents ni casse. */
 var COLS_IMPORT=[
-  {k:"entite",        t:"Entité",          m:/^ENTIT/},
-  {k:"contrepartie",  t:"Banque",          m:/^(BANQUE|CONTRE ?-? ?PARTIE|ETABLISSEMENT)/},
-  {k:"fournisseur",   t:"Fournisseur",     m:/^(FOURNISSEUR|BENEFICIAIRE|TIERS)/},
-  {k:"refCredit",     t:"Réf. crédit",     m:/^(REF|N[°O] ?(CREDIT|DOSSIER|REF)|NUMERO|NUM )/},
-  {k:"objet",         t:"Opération",       m:/^(OPERATION|OBJET|LIBELLE|DESIGNATION|DESCRIPTION)/},
-  {k:"dateCreation",  t:"Création",        m:/^(CREATION|DATE (DE )?CREATION|DATE (D')?OUVERTURE|OUVERTURE|DATE VALEUR|DATE OPERATION)/},
-  {k:"dateEcheance",  t:"Échéance",        m:/^(ECHEANCE|DATE (D')?ECHEANCE)/},
-  {k:"montantDevise", t:"Montant devise",  m:/^(MONTANT (EN )?DEVISE|MT DEVISE|MONTANT INITIAL|MONTANT$|MONTANT DEV)/},
-  {k:"devise",        t:"Devise",          m:/^(DEVISE|MONNAIE|CURRENCY)/},
-  {k:"montantXof",    t:"Montant XOF",     m:/^(MONTANT (XOF|F ?CFA|CFA)|CONTRE ?-? ?VALEUR|CV( XOF)?$|XOF|F ?CFA|MONTANT EN F)/},
-  {k:"mode",          t:"Mode",            m:/^(MODE|NATURE|TYPE( DE)? (FINANCEMENT|CREDIT)|INSTRUMENT)/},
-  {k:"datePaiement",  t:"Date paiement",   m:/^(DATE (DE )?(PAIEMENT|REGLEMENT)|PAIEMENT|PAYE LE|REGLE LE)/},
-  {k:"montantPaye",   t:"Montant payé",    m:/^(MONTANT (PAYE|REGLE)|PAYE|REGLE|DEJA REGLE|REGLEMENT)/},
-  {k:"reste",         t:"Reste à payer",   m:/^(RESTE|SOLDE|RESTANT)/},
-  {k:"pct",           t:"%",               m:/^(%|POURCENT|TAUX (DE )?REGL|AVANCEMENT)/},
-  {k:"statut",        t:"Statut",          m:/^(STATUT|ETAT|SITUATION)/},
-  {k:"observations",  t:"Observations",    m:/^(OBSERVATION|COMMENTAIRE|REMARQUE|NOTE)/}
+  {k:"entite",        t:"Entité",          fort:true,  m:/^ENTIT/},
+  {k:"contrepartie",  t:"Banque",          fort:false, m:/^(BANQUE|CONTRE ?-? ?PARTIE|ETABLISSEMENT)/},
+  {k:"fournisseur",   t:"Fournisseur",     fort:true,  m:/^(FOURNISSEUR|BENEFICIAIRE|TIERS)/},
+  {k:"refCredit",     t:"Réf. crédit",     fort:false, m:/^(REF(ERENCE|\.|\s|$)|N[°O] ?(CREDIT|DOSSIER|REF)|NUMERO|NUM )/},
+  {k:"objet",         t:"Opération",       fort:false, m:/^(OPERATION|OBJET|LIBELLE|DESIGNATION|DESCRIPTION)/},
+  {k:"dateCreation",  t:"Création",        fort:false, m:/^(CREATION|DATE (DE )?CREATION|DATE (D')?OUVERTURE|OUVERTURE|DATE VALEUR|DATE OPERATION)/},
+  {k:"dateEcheance",  t:"Échéance",        fort:true,  m:/^(ECHEANCE|DATE (D')?ECHEANCE)/},
+  {k:"montantDevise", t:"Montant devise",  fort:true,  m:/^(MONTANT (EN )?DEVISE|MT DEVISE|MONTANT INITIAL|MONTANT$|MONTANT DEV|MONTANT \(DEVISE\))/},
+  {k:"devise",        t:"Devise",          fort:false, m:/^(DEVISE|MONNAIE|CURRENCY)$/},
+  {k:"montantXof",    t:"Montant XOF",     fort:true,  m:/^(MONTANT (EN )?\(?(XOF|F ?CFA|CFA|FRANCS?)\)?|CONTRE ?-? ?VALEUR|CV( XOF| FCFA)?$|VALEUR (XOF|FCFA)|MONTANT EN F)/},
+  {k:"mode",          t:"Mode",            fort:false, m:/^(MODE|NATURE|TYPE( DE)? (FINANCEMENT|CREDIT)|INSTRUMENT)/},
+  {k:"datePaiement",  t:"Date paiement",   fort:false, m:/^(DATE (DE )?(PAIEMENT|REGLEMENT)|PAIEMENT$|PAYE LE|REGLE LE)/},
+  {k:"montantPaye",   t:"Montant payé",    fort:false, m:/^(MONTANT (PAYE|REGLE)|PAYE$|REGLE$|DEJA REGLE|REGLEMENTS?$)/},
+  {k:"reste",         t:"Reste à payer",   fort:false, m:/^(RESTE|SOLDE (A|RESTANT)|RESTANT)/},
+  {k:"pct",           t:"%",               fort:false, m:/^(%|POURCENT|TAUX (DE )?REGL|AVANCEMENT)/},
+  {k:"statut",        t:"Statut",          fort:false, m:/^(STATUT|ETAT|SITUATION)$/},
+  {k:"observations",  t:"Observations",    fort:false, m:/^(OBSERVATION|COMMENTAIRE|REMARQUE|NOTE)/}
 ];
 function normEnTete(s){ return normTxt(s).toUpperCase().replace(/[\u00a0\u202f]/g," ").replace(/\s+/g," ").trim(); }
+function carteParDefaut(){ var c={}; COLS_IMPORT.forEach(function(col,i){ c[col.k]=i; }); return c; }
+
+/* Découpe le collage en lignes puis en cellules, en respectant les cellules
+   entre guillemets qui contiennent des retours à la ligne (Excel les colle
+   ainsi quand une cellule est sur plusieurs lignes). */
+function decouperTsv(txt){
+  var brutes=txt.replace(/\r/g,"").split("\n"), lignes=[], cour=null;
+  brutes.forEach(function(l){
+    if(cour!==null){ cour+="\n"+l; } else { cour=l; }
+    var guillemets=(cour.match(/"/g)||[]).length;
+    if(guillemets%2===0){ lignes.push(cour); cour=null; }
+  });
+  if(cour!==null) lignes.push(cour);
+  return lignes.map(function(l){
+    return l.split("\t").map(function(c){
+      c=c.replace(/^\s*"([\s\S]*)"\s*$/,"$1").replace(/""/g,'"');
+      return c.replace(/\s*\n\s*/g," ").replace(/[\u00a0\u202f]/g," ").trim();
+    });
+  });
+}
+
+/* Un en-tête : au moins quatre intitulés reconnus, dont un « fort », et
+   aucune cellule qui soit un nombre ou une date — une ligne de données a
+   toujours des montants, un en-tête jamais. Sans cette garde, une ligne dont
+   les cellules commencent par REF…, XOF, SOLDE ou PAYE passait pour un
+   en-tête et toutes les suivantes perdaient leurs montants. */
 function detecterEnTete(cells){
-  var carte={}, n=0;
+  if(cells.some(function(c){ var s=String(c).trim(); return (/\d{3,}/.test(s.replace(/\s/g,"")) && parseNum(s)>=100) || (/\d/.test(s) && parseDate(s)); })) return null;
+  var carte={}, n=0, fort=false;
   cells.forEach(function(c,i){
     var h=normEnTete(c); if(!h) return;
     for(var j=0;j<COLS_IMPORT.length;j++){
       var col=COLS_IMPORT[j];
-      if(carte[col.k]===undefined && col.m.test(h)){ carte[col.k]=i; n++; return; }
+      if(carte[col.k]===undefined && col.m.test(h)){ carte[col.k]=i; n++; if(col.fort) fort=true; return; }
     }
   });
-  return n>=4 ? carte : null;
+  return (n>=4 && fort) ? carte : null;
 }
-function carteParDefaut(){ var c={}; COLS_IMPORT.forEach(function(col,i){ c[col.k]=i; }); return c; }
+/* Complète une carte partielle par les positions par défaut, sans réutiliser
+   une colonne déjà attribuée. */
+function completerCarte(detectee){
+  var carte=Object.assign({}, detectee), prises={};
+  Object.keys(carte).forEach(function(k){ prises[carte[k]]=1; });
+  COLS_IMPORT.forEach(function(col,i){ if(carte[col.k]===undefined && !prises[i]){ carte[col.k]=i; prises[i]=1; } });
+  return carte;
+}
 
-/* Devise : code, symbole ou mot ; à défaut, déduite du rapport entre les
-   deux montants ou de l'objet. */
 function deviseDe(txt, objet, mDev, mXof){
   var s=normEnTete(txt);
   if(/EUR|€|EURO/.test(s)) return {d:"EUR", sur:true};
@@ -1897,29 +1929,30 @@ function estTotal(cells){
   return /(^|\s)(S\/?TOTAL|SOUS-?TOTAL|TOTAL|TOTAUX|CUMUL)(\s|$)/.test(t);
 }
 /* Clé de doublon : le montant en devise plutôt que la contre-valeur, parce
-   que celle-ci a pu être recalculée à l'import (ancienne analyse : parité EUR
-   forcée). Recoller un fichier déjà importé ne crée ainsi aucun double. */
+   que celle-ci a pu être recalculée à l'import. Recoller un fichier déjà
+   importé ne crée ainsi aucun double. */
 function cleDoublon(e){
   var dev=e.devise||"XOF", m=dev==="XOF" ? (Number(e.montantXof)||Number(e.montantDevise)||0) : (Number(e.montantDevise)||0);
   return [normRef(e.refCredit), normEnTete(e.fournisseur), dev, Math.round(m*100)/100, e.dateEcheance||""].join("|");
 }
 
-function analyser(txt){
-  var lignes=txt.split(/\r?\n/), rows=[], rejets=[], flagsAttention=0, doublons=0;
-  var carte=null, enTete=false, prec=null, vus={};
+/* carteForcee : correspondance choisie à l'écran ; sinon détection. */
+function analyser(txt, carteForcee){
+  var tab=decouperTsv(txt), rows=[], rejets=[], flagsAttention=0, doublons=0;
+  var carte=carteForcee||null, enTete=false, prec=null, vus={}, brut=[];
   S.eng.forEach(function(e){ vus[cleDoublon(e)]="app"; });
   var F=function(l,m,n){ l.push({m:m, n:n||1}); };   // n : 1 information, 2 attention
 
-  lignes.forEach(function(ligne, idx){
+  tab.forEach(function(c, idx){
     var no=idx+1;
-    if(!ligne.trim()) return;                                        // ligne vide : rien à dire
-    var c=ligne.split("\t");
+    if(!c.join("").trim()) return;
+    if(brut.length<2) brut.push(c.slice(0,20));
     if(!carte){
       var d=detecterEnTete(c);
-      if(d){ carte=d; enTete=true; return; }
+      if(d){ carte=completerCarte(d); enTete=true; return; }
       carte=carteParDefaut();
     }
-    var g=function(k){ var i=carte[k]; return i===undefined ? "" : String(c[i]||"").replace(/[\u00a0\u202f]/g," ").trim(); };
+    var g=function(k){ var i=carte[k]; return (i===undefined||i<0) ? "" : String(c[i]||"").trim(); };
     var extrait=c.filter(function(x){ return x.trim(); }).slice(0,4).join(" · ").slice(0,90);
 
     if(estTotal(c)){ rejets.push({n:no, motif:"ligne de total ou de cumul", extrait:extrait}); return; }
@@ -1932,10 +1965,8 @@ function analyser(txt){
     var objet=g("objet");
     var mDev=parseNum(g("montantDevise")), mXof=parseNum(g("montantXof")), mPay=parseNum(g("montantPaye")), reste=g("reste")?parseNum(g("reste")):null;
 
-    // ligne sans contenu chiffré ni objet : un libellé de groupe, pas un engagement
     if(!mDev && !mXof && !objet && !ref){ rejets.push({n:no, motif:"aucun montant ni opération : libellé de groupe ?", extrait:extrait}); return; }
 
-    // cellules fusionnées dans Excel : la valeur n'est écrite que sur la première ligne du groupe
     if(!entite && prec){ entite=prec.entite; F(f,"entité reprise de la ligne du dessus ("+entite+")",1); }
     if(!entite){ rejets.push({n:no, motif:"entité absente, et aucune ligne au-dessus pour la reprendre", extrait:extrait}); return; }
     if(!banque && prec && prec.entite===entite){ banque=prec.contrepartie; F(f,"banque reprise de la ligne du dessus",1); }
@@ -1944,7 +1975,6 @@ function analyser(txt){
     if(S.ref.entites.length && S.ref.entites.indexOf(entite)<0) F(f,"entité « "+entite+" » absente du référentiel",2);
     if(banque && S.ref.contreparties.indexOf(banque)<0) F(f,"banque « "+banque+" » absente du référentiel",1);
 
-    // devise et montants
     var dv=deviseDe(g("devise"), objet, mDev, mXof), devise=dv.d;
     if(!dv.sur && g("devise")) F(f,"devise « "+g("devise")+" » non reconnue : "+devise+" retenue"+(dv.motif?" ("+dv.motif+")":""),2);
     else if(!dv.sur && dv.motif) F(f,"devise déduite : "+devise+" ("+dv.motif+")",1);
@@ -1954,7 +1984,7 @@ function analyser(txt){
     var taux=1;
     if(devise==="XOF"){
       if(!mXof) mXof=mDev; mDev=mXof;
-      if(!mXof){ rejets.push({n:no, motif:"montant absent", extrait:extrait}); return; }
+      if(!mXof){ rejets.push({n:no, motif:"montant absent (colonnes « "+COLS_IMPORT[7].t+" » et « "+COLS_IMPORT[9].t+" » vides : vérifiez la correspondance des colonnes)", extrait:extrait}); return; }
     } else {
       var tRef=tauxPour(devise, dCre||dEch||today());
       if(mDev && mXof){
@@ -1967,12 +1997,11 @@ function analyser(txt){
       } else if(!mDev && mXof){
         if(tRef){ taux=tRef; mDev=Math.round(mXof/tRef*100)/100; F(f,"montant en devise déduit de la contre-valeur au taux "+num2(tRef),1); }
         else { taux=0; F(f,"montant en devise inconnu (aucun taux de référence)",2); }
-      } else { rejets.push({n:no, motif:"montant absent", extrait:extrait}); return; }
+      } else { rejets.push({n:no, motif:"montant absent (colonnes « "+COLS_IMPORT[7].t+" » et « "+COLS_IMPORT[9].t+" » vides : vérifiez la correspondance des colonnes)", extrait:extrait}); return; }
     }
     mXof=Math.round(mXof);
     if(dCre && dEch && dCre>dEch) F(f,"création postérieure à l'échéance",2);
 
-    // règlements et cohérence
     var regs=[], dPay=parseDate(g("datePaiement")), stTxt=normEnTete(g("statut"));
     if(g("datePaiement") && !dPay) F(f,"date de paiement illisible « "+g("datePaiement")+" »",2);
     if(mPay>mXof+1){ F(f,"règlement "+num(mPay)+" supérieur au montant : plafonné à "+num(mXof),2); mPay=mXof; }
@@ -2004,29 +2033,50 @@ function analyser(txt){
     if(f.some(function(x){ return x.n===2; })) flagsAttention++;
     rows.push(row); prec=row;
   });
-  return { rows:rows, rejets:rejets, ignored:rejets.length, flags:flagsAttention, doublons:doublons, carte:carte||carteParDefaut(), enTete:enTete };
+  return { rows:rows, rejets:rejets, ignored:rejets.length, flags:flagsAttention, doublons:doublons,
+           carte:carte||carteParDefaut(), enTete:enTete, forcee:!!carteForcee, brut:brut, nbCol:Math.max.apply(null,[0].concat(tab.map(function(c){ return c.length; }))) };
+}
+
+/* Correspondance des colonnes, modifiable : un sélecteur par champ, avec
+   pour chaque colonne son intitulé (si en-tête) ou un aperçu de la première
+   ligne. */
+function vCarteImport(st){
+  var nb=st.nbCol||17, exemples=st.brut[st.enTete?1:0]||[], entetes=st.enTete?(st.brut[0]||[]):[];
+  var libCol=function(i){
+    var e=(entetes[i]||"").slice(0,18), x=(exemples[i]||"").slice(0,18);
+    return "col. "+(i+1)+(e?" · "+e:(x?" · "+x:""));
+  };
+  return '<details'+(st.rows.length?'':' open')+' style="margin-bottom:10px"><summary style="cursor:pointer;font-size:12.5px;font-weight:600">Correspondance des colonnes'+
+    (st.forcee?' — modifiée à la main':(st.enTete?' — d\'après l\'en-tête':' — ordre par défaut, aucun en-tête reconnu'))+'</summary>'+
+    '<div class="hint" style="margin:6px 0 8px">Si un champ pointe sur la mauvaise colonne, corrigez-le ici : l\'analyse se refait aussitôt, sans recoller.</div>'+
+    '<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px">'+
+    COLS_IMPORT.map(function(col){
+      var v=st.carte[col.k];
+      return '<div><label style="font-size:11px">'+esc(col.t)+'</label><select data-impcol="'+col.k+'" style="font-size:11.5px;padding:3px 6px">'+
+        '<option value="-1"'+(v===undefined||v<0||v>=nb?' selected':'')+'>— aucune —</option>'+
+        Array.apply(null,{length:nb}).map(function(_,i){ return '<option value="'+i+'"'+(v===i?' selected':'')+'>'+esc(libCol(i))+'</option>'; }).join("")+
+        '</select></div>';
+    }).join("")+'</div></details>';
 }
 
 function vImport(){
   var st=S.importState;
   var aEnregistrer = st ? st.rows.filter(function(r){ return !r._doublon; }).length : 0;
   var colonnes=COLS_IMPORT.map(function(c){ return c.t; }).join(" · ");
-  var carteHtml = st ? '<div class="hint" style="margin-bottom:8px">'+(st.enTete
-      ? 'En-tête reconnu : colonnes repérées par leur intitulé — '
-      : 'Aucun en-tête reconnu : ordre des colonnes par défaut — ')+
-      COLS_IMPORT.filter(function(c){ return st.carte[c.k]!==undefined; }).map(function(c){ return esc(c.t)+' ← col. '+(st.carte[c.k]+1); }).join(', ')+'.</div>' : '';
   return '<div class="head"><div><h2>Reprise du fichier Excel</h2>'+
     '<p>Copiez les lignes depuis Excel, en-tête compris de préférence, et collez-les ici. Les colonnes sont reconnues à leur intitulé, les cellules fusionnées sont reprises de la ligne du dessus, les dates et montants sont interprétés avec tolérance. Chaque écart est expliqué avant enregistrement.</p></div></div>'+
     '<div class="panel"><div class="pb">'+
       '<div class="field"><label>Colonnes reconnues (dans cet ordre si le fichier n\'a pas d\'en-tête)</label><div class="hint">'+esc(colonnes)+'</div></div>'+
-      '<div class="field"><label>Données collées</label><textarea id="imp_data" rows="8" placeholder="Collez ici (Ctrl+V) la sélection copiée depuis Excel, ligne d\'en-tête comprise"></textarea></div>'+
+      '<div class="field"><label>Données collées</label><textarea id="imp_data" rows="8" placeholder="Collez ici (Ctrl+V) la sélection copiée depuis Excel, ligne d\'en-tête comprise">'+esc(S.importTexte||"")+'</textarea></div>'+
       '<div class="inline"><button class="btn sec" id="impAnalyse">Analyser</button>'+
       (st&&aEnregistrer?'<button class="btn" id="impValider"'+(S.writable?"":" disabled")+'>Enregistrer '+aEnregistrer+' engagement'+(aEnregistrer>1?'s':'')+'</button>':"")+
       '</div></div></div>'+
     (st ? '<div class="panel" style="margin-top:14px"><div class="ph"><h3>Résultat de l\'analyse</h3>'+
         '<span style="font-size:12px;color:var(--ink-2)">'+st.rows.length+' ligne'+(st.rows.length>1?'s':'')+' lue'+(st.rows.length>1?'s':'')+' · '+
         aEnregistrer+' à enregistrer · '+st.doublons+' doublon'+(st.doublons>1?'s':'')+' · '+st.flags+' à vérifier · '+st.ignored+' ignorée'+(st.ignored>1?'s':'')+'</span></div>'+
-      '<div class="pb">'+carteHtml+
+      '<div class="pb">'+
+      (st.rows.length===0 && st.ignored>0 ? '<div class="warnbox">Aucune ligne retenue. Le plus souvent, les colonnes de montant ne sont pas au bon endroit : vérifiez la correspondance des colonnes ci-dessous, puis relancez.</div>' : '')+
+      vCarteImport(st)+
       (st.ignored ? '<details'+(st.rows.length?'':' open')+' style="margin-bottom:10px"><summary style="cursor:pointer;font-size:12.5px;font-weight:600">'+st.ignored+' ligne'+(st.ignored>1?'s':'')+' ignorée'+(st.ignored>1?'s':'')+' — pourquoi</summary>'+
         '<div class="scroll"><table><thead><tr><th>Ligne</th><th>Motif</th><th>Extrait</th></tr></thead><tbody>'+
         st.rejets.slice(0,60).map(function(r){ return '<tr><td class="mono">'+r.n+'</td><td>'+esc(r.motif)+'</td><td class="hint" style="margin:0">'+esc(r.extrait)+'</td></tr>'; }).join("")+
@@ -3435,6 +3485,7 @@ document.addEventListener("click", async function(ev){
   if(ev.target.id==="impAnalyse"){
     var txt=$("imp_data").value||"";
     if(!txt.trim()){ toast("Collez d'abord les lignes du fichier"); return; }
+    S.importTexte=txt; S.importCarte=null;      // nouveau collage : la détection repart de zéro
     S.importState=analyser(txt); render();
     toast(S.importState.rows.length+" lignes analysées"); return;
   }
@@ -3487,6 +3538,16 @@ document.addEventListener("click", async function(ev){
 
 document.addEventListener("change", async function(ev){
   if((ev.target.id||"")==="bl_delai"){ majEcheanceBL(); return; }
+
+  // correspondance des colonnes de la reprise Excel corrigée à la main :
+  // on ré-analyse le même collage avec la carte choisie
+  var ic=ev.target.closest("[data-impcol]");
+  if(ic && S.importState){
+    S.importCarte=Object.assign({}, S.importCarte||S.importState.carte);
+    S.importCarte[ic.getAttribute("data-impcol")]=Number(ic.value);
+    S.importState=analyser(S.importTexte||"", S.importCarte); render();
+    toast(S.importState.rows.length+" lignes analysées avec la correspondance corrigée"); return;
+  }
 
   if(ev.target.id==="ech_obs"){
     S.echObs=!!ev.target.checked;
