@@ -151,6 +151,11 @@ document reprend exactement la vue à l'écran — filtres appliqués rappelés 
 indicateurs, lignes regroupées par mois avec sous-totaux, total général. Filtrer d'abord sur
 une entité, une banque ou un statut donne un échéancier ciblé prêt à transmettre.
 
+**Colonnes de l'échéancier** : chaque en-tête porte une poignée à son bord droit ; la glisser
+à la souris ajuste la largeur de la colonne (les autres ne bougent pas). Les largeurs sont
+mémorisées dans le navigateur ; un double-clic sur une poignée remet tout en automatique. La
+case *Commentaires* ajoute une colonne facultative avec son propre filtre.
+
 **Convention des rapports** : les analyses croisées portent sur les engagements échéancés ;
 les dossiers sans échéance (en cours d'ouverture, attente de BL) sont présentés à part et
 n'entrent pas dans les totaux échéancés. Toutes les répartitions sont calculées sur le reste

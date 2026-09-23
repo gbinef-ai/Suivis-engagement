@@ -198,11 +198,19 @@ main{flex:1;min-width:0;padding:18px 22px 60px;max-width:1560px;width:100%}
 .loupe svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);width:13px;height:13px;stroke:var(--ink-3);fill:none;stroke-width:2;stroke-linecap:round;pointer-events:none}
 .loupe input{padding-left:26px;width:100%}
 .loupe input:focus+svg,.loupe input:focus~svg{stroke:var(--green)}
-table.ech th{font-size:10px;letter-spacing:.02em;text-transform:uppercase;padding:7px 8px}
-table.ech td{padding:5px 8px;font-size:11.5px}
-table.ech .tag{font-size:10.5px;padding:1px 6px}
-table.ech .monthband td{font-size:11.5px;padding:5px 8px}
-table.ech tfoot td{font-size:11.5px;padding:7px 8px}
+table.ech th{font-size:9.5px;letter-spacing:.02em;text-transform:uppercase;padding:6px 7px}
+table.ech td{padding:4px 7px;font-size:11px}
+/* poignées de redimensionnement des colonnes : bord droit de chaque en-tête */
+table.ech thead tr:first-child th{position:sticky;overflow:visible}
+.redim{position:absolute;top:0;right:0;width:8px;height:100%;cursor:col-resize;user-select:none;z-index:2}
+.redim::after{content:"";position:absolute;top:20%;bottom:20%;right:0;width:2px;background:transparent;border-radius:1px}
+.redim:hover::after,body.redim-en-cours .redim::after{background:var(--blue)}
+body.redim-en-cours{cursor:col-resize!important;user-select:none}
+body.redim-en-cours *{cursor:col-resize!important}
+table.ech[style*="fixed"] td{overflow:hidden;text-overflow:ellipsis}
+table.ech .tag{font-size:10px;padding:1px 6px}
+table.ech .monthband td{font-size:11px;padding:4px 7px}
+table.ech tfoot td{font-size:11px;padding:6px 7px}
 table.ech tfoot .nb{font-weight:500;color:var(--ink-2);margin-left:8px}
 .filtres-actifs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:7px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-2)}
 .filtres-actifs .lib{margin-right:2px}
@@ -214,8 +222,9 @@ table.ech tr.ligne.pair td{background:var(--zebra)}
 table.ech tr.ligne:hover td{background:var(--blue-2)}
 /* une ligne par échéance : rien ne se replie, les textes longs sont coupés
    par des points de suspension et lisibles en entier au survol */
-table.ech td{white-space:nowrap;vertical-align:middle;padding:5px 6px}
-table.ech th{padding:7px 6px}
+table.ech td{white-space:nowrap;vertical-align:middle;padding:4px 6px}
+table.ech th{padding:6px 6px}
+table.ech td.mono,table.ech .monthband td.mono,table.ech tfoot td.mono{letter-spacing:.015em}
 table.ech td.tronque{max-width:120px;overflow:hidden;text-overflow:ellipsis}
 table.ech td.ref{max-width:104px}
 table.ech td.op1{max-width:210px}
@@ -703,6 +712,7 @@ var S = {
   tb:"synthese",                       // sous-onglet du tableau de bord
   railOuvert:(function(){ try{ return localStorage.getItem("toguna:rail")==="1"; }catch(e){ return false; } })(),
   echObs:(function(){ try{ return localStorage.getItem("toguna:ech_obs")==="1"; }catch(e){ return false; } })(),  // colonne Commentaires de l'échéancier
+  echLarg:(function(){ try{ return JSON.parse(localStorage.getItem("toguna:ech_larg")||"null"); }catch(e){ return null; } })(),  // largeurs de colonnes réglées à la souris
   hf:{ q:"", entite:"", contrepartie:"", fournisseur:"", annee:"" }, bl:null
 };
 var MODES_AMORT = ["CMT","PMT"];
@@ -722,8 +732,11 @@ var DEFAULT_REF = {
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
 function uid(){ return "e"+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
-function num(n){ n=Number(n)||0; return n.toLocaleString("fr-FR",{maximumFractionDigits:0}); }
-function num2(n){ n=Number(n)||0; return n.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+/* toLocaleString("fr-FR") sépare les milliers par une espace fine insécable
+   (U+202F), quasi invisible en petit corps : on la remplace par l'espace
+   insécable classique, qui se voit et ne coupe pas le nombre. */
+function num(n){ n=Number(n)||0; return n.toLocaleString("fr-FR",{maximumFractionDigits:0}).replace(/ /g," "); }
+function num2(n){ n=Number(n)||0; return n.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2}).replace(/ /g," "); }
 function md(n){ n=Math.round((Number(n)||0)/1e6)/1e3; return n.toLocaleString("fr-FR",{maximumFractionDigits:2})+" Md"; }
 function today(){ var d=new Date(); return d.toISOString().slice(0,10); }
 function dfr(iso){ if(!iso) return "—"; var p=String(iso).split("-"); return p.length===3 ? p[2]+"/"+p[1]+"/"+p[0] : iso; }
@@ -1564,12 +1577,30 @@ function fcol(id, val, liste, placeholder){
     (liste?'<datalist id="dl_'+id+'">'+liste.map(function(o){ return '<option value="'+esc(o)+'">'; }).join("")+'</datalist>':'')+'</div></th>';
 }
 var STATUTS_ECH=["Brouillon","En cours d'ouverture","En attente de BL","À venir","Échéance proche","En retard","Partiellement réglé","Soldé","Soldé avec retard"];
+/* Colonnes de l'échéancier : clé stable (pour mémoriser les largeurs), libellé, alignement */
+var COLS_ECH=[["ech","Échéance",""],["ret","Retard","r"],["ent","Entité",""],["bq","Banque",""],["fo","Fournisseur",""],["ref","Réf. crédit",""],
+              ["op","Opération",""],["mode","Mode",""],["dev","Devise","r"],["cv","Contre-valeur","r"],["reg","Réglé","r"],["res","Reste à payer","r"],["st","Statut",""]];
+function colsEch(){ return S.echObs ? COLS_ECH.concat([["obs","Commentaires",""]]) : COLS_ECH; }
+/* Largeurs mémorisées : on ne les applique que si chaque colonne visible en a une,
+   sinon on laisse le navigateur répartir. */
+function largeursEchValides(){
+  var L=S.echLarg; if(!L) return null;
+  var cols=colsEch(); for(var i=0;i<cols.length;i++){ if(!(L[cols[i][0]]>0)) return null; }
+  return L;
+}
+function appliquerLargeursEch(table){
+  var L=largeursEchValides(); if(!table || !L) return;
+  var total=0;
+  table.querySelectorAll("colgroup col").forEach(function(c){ var w=L[c.getAttribute("data-col")]; c.style.width=w+"px"; total+=w; });
+  table.style.tableLayout="fixed"; table.style.width=total+"px";
+}
 function vEcheancierEntete(){
-  var f=S.filters;
-  return '<thead><tr>'+
-    '<th>Échéance</th><th class="r">Retard</th><th>Entité</th><th>Banque</th><th>Fournisseur</th><th>Réf. crédit</th><th>Opération</th><th>Mode</th>'+
-    '<th class="r">Devise</th><th class="r">Contre-valeur</th><th class="r">Réglé</th><th class="r">Reste à payer</th><th>Statut</th>'+
-    (S.echObs?'<th>Commentaires</th>':'')+'</tr>'+
+  var f=S.filters, cols=colsEch(), L=largeursEchValides();
+  return '<colgroup>'+cols.map(function(c){ return '<col data-col="'+c[0]+'"'+(L?' style="width:'+L[c[0]]+'px"':'')+'>'; }).join("")+'</colgroup>'+
+    '<thead><tr>'+cols.map(function(c){
+      return '<th data-col="'+c[0]+'"'+(c[2]?' class="'+c[2]+'"':'')+'>'+esc(c[1])+
+        '<span class="redim" data-redim="'+c[0]+'" title="Glisser pour ajuster la largeur · double-clic pour tout réinitialiser"></span></th>';
+    }).join("")+'</tr>'+
     '<tr class="fcol"><th></th><th></th>'+
     fcol("f_entite",f.entite,S.ref.entites,"")+
     fcol("f_contrepartie",f.contrepartie,S.ref.contreparties,"")+
@@ -1653,7 +1684,7 @@ function vEcheancierCorps(){
   var rows=filtered();
   return '<div id="ech_kpi">'+vEchKpi(rows)+'</div>'+
     '<div class="panel"><div id="ech_chips">'+vEchChips()+'</div>'+
-    '<div class="scroll"><table class="ech">'+vEcheancierEntete()+
+    '<div class="scroll"><table class="ech"'+(largeursEchValides()?' style="table-layout:fixed;width:'+Object.keys(largeursEchValides()).reduce(function(s,k){ return s+(colsEch().some(function(c){ return c[0]===k; })?largeursEchValides()[k]:0); },0)+'px"':'')+'>'+vEcheancierEntete()+
     '<tbody id="ech_tbody">'+vEchTbody(rows)+'</tbody><tfoot id="ech_tfoot">'+vEchTfoot(rows)+'</tfoot></table></div></div>';
 }
 /* À la frappe : tout ce qui dépend des filtres, et rien de ce qui les porte. */
@@ -3614,6 +3645,34 @@ function quiEst(uid){
   var m=S.membres[uid]||{};
   return m.email || m.nom || uid;
 }
+
+/* ---------- largeur des colonnes de l'échéancier, à la souris ---------- */
+document.addEventListener("mousedown", function(ev){
+  var h=ev.target.closest("[data-redim]"); if(!h) return;
+  ev.preventDefault();
+  // double-clic (detail = nombre de clics) : tout revient à l'automatique
+  if(ev.detail>=2){
+    S.echLarg=null; try{ localStorage.removeItem("toguna:ech_larg"); }catch(err){}
+    render(); toast("Largeurs des colonnes réinitialisées"); return;
+  }
+  var table=h.closest("table"), k=h.getAttribute("data-redim");
+  // premier réglage : on fige toutes les colonnes à leur largeur actuelle,
+  // pour que seule celle qu'on tire bouge
+  if(!largeursEchValides()){
+    S.echLarg={};
+    table.querySelectorAll("thead tr:first-child th").forEach(function(th){ S.echLarg[th.getAttribute("data-col")]=Math.round(th.getBoundingClientRect().width); });
+    appliquerLargeursEch(table);
+  }
+  var x0=ev.clientX, w0=S.echLarg[k];
+  document.body.classList.add("redim-en-cours");
+  function bouge(e){ S.echLarg[k]=Math.max(36, Math.round(w0+(e.clientX-x0))); appliquerLargeursEch(table); }
+  function lache(){
+    document.removeEventListener("mousemove", bouge); document.removeEventListener("mouseup", lache);
+    document.body.classList.remove("redim-en-cours");
+    try{ localStorage.setItem("toguna:ech_larg", JSON.stringify(S.echLarg)); }catch(err){}
+  }
+  document.addEventListener("mousemove", bouge); document.addEventListener("mouseup", lache);
+});
 
 function majEcheanceBL(){
   var dl=$("bl_delai"), dt=$("bl_date"), ec=$("bl_echeance");
