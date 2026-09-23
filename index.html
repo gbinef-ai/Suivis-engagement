@@ -1896,7 +1896,13 @@ function estTotal(cells){
   var t=cells.slice(0,4).map(normEnTete).join(" ");
   return /(^|\s)(S\/?TOTAL|SOUS-?TOTAL|TOTAL|TOTAUX|CUMUL)(\s|$)/.test(t);
 }
-function cleDoublon(e){ return [normRef(e.refCredit), normEnTete(e.fournisseur), Math.round(Number(e.montantXof)||0), e.dateEcheance||""].join("|"); }
+/* Clé de doublon : le montant en devise plutôt que la contre-valeur, parce
+   que celle-ci a pu être recalculée à l'import (ancienne analyse : parité EUR
+   forcée). Recoller un fichier déjà importé ne crée ainsi aucun double. */
+function cleDoublon(e){
+  var dev=e.devise||"XOF", m=dev==="XOF" ? (Number(e.montantXof)||Number(e.montantDevise)||0) : (Number(e.montantDevise)||0);
+  return [normRef(e.refCredit), normEnTete(e.fournisseur), dev, Math.round(m*100)/100, e.dateEcheance||""].join("|");
+}
 
 function analyser(txt){
   var lignes=txt.split(/\r?\n/), rows=[], rejets=[], flagsAttention=0, doublons=0;
