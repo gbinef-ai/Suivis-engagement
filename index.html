@@ -16,6 +16,7 @@
   --red:#98302A; --red-2:#F6E7E5;
   --amber:#8F5C0C; --amber-2:#F7EEDD;
   --blue:#33598A; --blue-2:#E6ECF4;
+  --zebra:#F1F4EE;
   --violet:#5B4A86; --violet-2:#ECE8F5;
   --rail:#0055A4; --rail-ink:#DCE6F2;
   --shadow:0 1px 0 rgba(18,32,47,.06);
@@ -30,6 +31,7 @@
     --red:#E58A83; --red-2:#331D1C;
     --amber:#D6A552; --amber-2:#2F2718;
     --blue:#8FB2DC; --blue-2:#1A2434;
+    --zebra:#182330;
     --violet:#AFA0D8; --violet-2:#221E33;
     --rail:#052F5C; --rail-ink:#C7D6E8;
     --shadow:none;
@@ -43,6 +45,7 @@
   --red:#E58A83; --red-2:#331D1C;
   --amber:#D6A552; --amber-2:#2F2718;
   --blue:#8FB2DC; --blue-2:#1A2434;
+  --zebra:#182330;
   --violet:#AFA0D8; --violet-2:#221E33;
   --rail:#052F5C; --rail-ink:#C7D6E8;
   --shadow:none;
@@ -205,6 +208,9 @@ table.ech tfoot .nb{font-weight:500;color:var(--ink-2);margin-left:8px}
 .filtres-actifs .lib{margin-right:2px}
 .chip{display:inline-block;background:var(--blue-2);color:var(--blue);border:1px solid var(--blue);border-radius:999px;padding:1px 8px;font-size:11.5px;white-space:nowrap}
 table.ech tr.ligne{cursor:pointer}
+/* deux teintes alternées, recalculées à chaque mois pour que l'alternance
+   reparte proprement sous chaque bande */
+table.ech tr.ligne.pair td{background:var(--zebra)}
 table.ech tr.ligne:hover td{background:var(--blue-2)}
 /* une ligne par échéance : rien ne se replie, les textes longs sont coupés
    par des points de suspension et lisibles en entier au survol */
@@ -1575,18 +1581,18 @@ function vEchChips(){
 function vEchTbody(rows){
   if(!rows.length) return '<tr><td colspan="'+nbColEch()+'"><div class="empty"><strong>Aucune échéance ne correspond</strong>'+
     (filtresActifs().length?'Élargissez les filtres ou réinitialisez-les.':'Saisissez un engagement ou reprenez votre fichier Excel.')+'</div></td></tr>';
-  var body="", curM=null;
+  var body="", curM=null, rang=0;
   rows.forEach(function(e){
     var m=mois(e.dateEcheance);
     if(m!==curM){
-      curM=m;
+      curM=m; rang=0;
       var grp=rows.filter(function(x){ return mois(x.dateEcheance)===m; });
       body+='<tr class="monthband"><td colspan="9">'+esc(moisLabel(m))+'<span class="nb">'+grp.length+' échéance'+(grp.length>1?'s':'')+'</span></td>'+
         '<td class="r mono">'+num(somme(grp,montant))+'</td><td class="r mono">'+n0(somme(grp,paye))+'</td>'+
         '<td class="r mono">'+num(somme(grp,reste))+'</td><td></td>'+(S.echObs?'<td></td>':'')+'</tr>';
     }
     var st=statut(e), enDevise=e.devise && e.devise!=="XOF";
-    body+='<tr data-eng="'+esc(e.id)+'" class="ligne">'+
+    body+='<tr data-eng="'+esc(e.id)+'" class="ligne'+(rang++%2?' pair':'')+'">'+
       '<td class="rowline date mono" style="border-left-color:'+statutColor(st)+'">'+dfr(e.dateEcheance)+'</td>'+
       retardCel(e)+
       '<td class="entite">'+esc(e.entite||"—")+'</td>'+
