@@ -197,32 +197,37 @@ main{flex:1;min-width:0;padding:18px 22px 60px;max-width:1560px;width:100%}
 .loupe input:focus+svg,.loupe input:focus~svg{stroke:var(--green)}
 table.ech th{font-size:10px;letter-spacing:.02em;text-transform:uppercase;padding:7px 8px}
 table.ech td{padding:5px 8px;font-size:11.5px}
-table.ech td.op{font-size:11.5px}
-table.ech td.op small{font-size:10.5px}
 table.ech .tag{font-size:10.5px;padding:1px 6px}
-table.ech td.date small{font-size:10px}
-table.ech td.mono small{font-size:10px}
 table.ech .monthband td{font-size:11.5px;padding:5px 8px}
 table.ech tfoot td{font-size:11.5px;padding:7px 8px}
-.prog .pc{font-size:10.5px}
+table.ech tfoot .nb{font-weight:500;color:var(--ink-2);margin-left:8px}
 .filtres-actifs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:7px 14px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-2)}
 .filtres-actifs .lib{margin-right:2px}
 .chip{display:inline-block;background:var(--blue-2);color:var(--blue);border:1px solid var(--blue);border-radius:999px;padding:1px 8px;font-size:11.5px;white-space:nowrap}
 table.ech tr.ligne{cursor:pointer}
 table.ech tr.ligne:hover td{background:var(--blue-2)}
-table.ech td.date b{display:block;font-variant-numeric:tabular-nums}
-table.ech td.date small{display:block;color:var(--ink-3);margin-top:1px}
-table.ech td.date small.retard{color:var(--red);font-weight:700}
-table.ech td.date small.proche{color:var(--amber);font-weight:700}
-table.ech td.mono small{display:block;color:var(--ink-3);margin-top:1px}
+/* une ligne par échéance : rien ne se replie, les textes longs sont coupés
+   par des points de suspension et lisibles en entier au survol */
+table.ech td{white-space:nowrap;vertical-align:middle;padding:5px 6px}
+table.ech th{padding:7px 6px}
+table.ech td.tronque{max-width:120px;overflow:hidden;text-overflow:ellipsis}
+table.ech td.ref{max-width:104px}
+table.ech td.op1{max-width:210px}
+table.ech tr.fcol select{padding:3px 2px}
+table.ech td.ref .tr{color:var(--ink-3);font-size:10.5px;font-weight:400}
+table.ech td.retard{color:var(--red);font-weight:700}
+table.ech td.retard.vide,table.ech .vide{color:var(--ink-3);font-weight:400}
 table.ech td.entite{font-weight:600}
 table.ech td.reste b{font-weight:700}
+table.ech tr.fcol th{padding:4px 5px;background:var(--surface);border-bottom:1px solid var(--line-strong);position:static;text-transform:none;letter-spacing:0}
+table.ech tr.fcol input,table.ech tr.fcol select{padding:3px 6px;font-size:11px;height:26px;min-width:0;width:100%}
+.loupe.sm svg{width:11px;height:11px;left:6px}
+.loupe.sm input{padding-left:21px}
+.filters.barre{grid-template-columns:3fr 2fr 1fr}
+@media(max-width:900px){.filters.barre{grid-template-columns:1fr}}
 table.ech .monthband td{background:var(--blue-2);color:var(--ink);border-top:1px solid var(--line-strong);border-bottom:1px solid var(--line-strong)}
 table.ech .monthband .nb{font-weight:500;color:var(--ink-2);font-size:11.5px;margin-left:8px}
 table.ech tfoot td{font-weight:700;background:var(--surface-2);border-top:2px solid var(--line-strong)}
-.prog{display:flex;align-items:center;gap:6px;min-width:100px}
-.prog .bar{flex:1;min-width:48px}
-.prog .pc{font-variant-numeric:tabular-nums;min-width:36px;text-align:right;color:var(--ink-2)}
 
 /* ---------- blocks ---------- */
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
@@ -1435,6 +1440,8 @@ function filtered(){
     if(f.entite && !contient(e.entite, f.entite)) return false;
     if(f.contrepartie && !contient(e.contrepartie, f.contrepartie)) return false;
     if(f.fournisseur && !contient(e.fournisseur, f.fournisseur)) return false;
+    if(f.ref && !contient((e.refCredit||"")+" "+(e.rang||""), f.ref)) return false;
+    if(f.objet && !contient(e.objet, f.objet)) return false;
     if(f.mode && !contient(e.mode, f.mode)) return false;
     if(f.devise && e.devise!==f.devise) return false;
     if(f.statut && statut(e)!==f.statut) return false;
@@ -1448,7 +1455,7 @@ function selOpts(list, val){
   return list.map(function(o){ return '<option value="'+esc(o)+'"'+(o===val?" selected":"")+">"+esc(o)+"</option>"; }).join("");
 }
 function filtresParDefaut(){
-  return { q:"", entite:"", contrepartie:"", fournisseur:"", mode:"", statut:"", devise:"", du:"", au:"", brouillon:"masquer" };
+  return { q:"", entite:"", contrepartie:"", fournisseur:"", ref:"", objet:"", mode:"", statut:"", devise:"", du:"", au:"", brouillon:"masquer" };
 }
 function filtresActifs(){
   var d=filtresParDefaut(), f=S.filters, n=[];
@@ -1462,6 +1469,8 @@ function libFiltres(){
   if(f.entite) p.push("entité "+f.entite);
   if(f.contrepartie) p.push("banque "+f.contrepartie);
   if(f.fournisseur) p.push("fournisseur "+f.fournisseur);
+  if(f.ref) p.push("référence "+f.ref);
+  if(f.objet) p.push("opération "+f.objet);
   if(f.mode) p.push("mode "+f.mode);
   if(f.statut) p.push("statut "+f.statut);
   if(f.devise) p.push("devise "+f.devise);
@@ -1469,14 +1478,6 @@ function libFiltres(){
   if(f.brouillon==="inclure") p.push("brouillons inclus");
   else if(f.brouillon==="seuls") p.push("brouillons seulement");
   return p;
-}
-function echeanceHint(e){
-  var d=days(e.dateEcheance);
-  if(d===null || estSolde(e) || reste(e)<=0) return "";
-  if(d<0)   return '<small class="retard">Retard '+(-d)+' j</small>';
-  if(d===0) return '<small class="retard">Aujourd\'hui</small>';
-  if(d<=Number(S.params.seuilProche||30)) return '<small class="proche">J-'+d+'</small>';
-  return '<small>J-'+d+'</small>';
 }
 function kpiC(k,v,d,cls){
   return '<div class="kpi compact '+(cls||"")+'"><div class="k">'+esc(k)+'</div><div class="v">'+esc(v)+'<small>FCFA</small></div><div class="d"><span>'+esc(d)+'</span></div></div>';
@@ -1498,16 +1499,9 @@ function nbEcheancier(rows){
 }
 function vEcheancierFiltres(){
   var f=S.filters;
-  var statuts=["Brouillon","En cours d'ouverture","En attente de BL","À venir","Échéance proche","En retard","Partiellement réglé","Soldé","Soldé avec retard"];
-  return '<div class="filters" id="ech_filtres">'+
-    champLoupe("f_q","Recherche",f.q,null,"objet, référence, observation…","large")+
-    champLoupe("f_entite","Entité",f.entite,S.ref.entites,"Toutes")+
-    champLoupe("f_contrepartie","Banque",f.contrepartie,S.ref.contreparties,"Toutes")+
-    champLoupe("f_fournisseur","Fournisseur",f.fournisseur,S.ref.fournisseurs,"Tous")+
-    champLoupe("f_mode","Mode",f.mode,S.ref.modes,"Tous")+
-    '<div><label for="f_statut">Statut</label><select id="f_statut"><option value="">Tous</option>'+selOpts(statuts,f.statut)+'</select></div>'+
-    '<div><label for="f_devise">Devise</label><select id="f_devise"><option value="">Toutes</option>'+selOpts(["XOF","EUR","USD"],f.devise)+'</select></div>'+
-    '<div class="large"><label>Échéance du — au</label><div style="display:flex;gap:6px">'+
+  return '<div class="filters barre" id="ech_filtres">'+
+    champLoupe("f_q","Recherche globale",f.q,null,"objet, référence, observation, fournisseur, banque…")+
+    '<div><label>Échéance du — au</label><div style="display:flex;gap:6px">'+
       '<input type="date" id="f_du" value="'+esc(f.du)+'" title="À partir du"><input type="date" id="f_au" value="'+esc(f.au)+'" title="Jusqu\'au"></div></div>'+
     '<div><label for="f_brouillon">Brouillons</label><select id="f_brouillon">'+
       '<option value="masquer"'+(f.brouillon==="masquer"?" selected":"")+'>Masqués</option>'+
@@ -1515,60 +1509,112 @@ function vEcheancierFiltres(){
       '<option value="seuls"'+(f.brouillon==="seuls"?" selected":"")+'>Seulement</option></select></div>'+
   '</div>';
 }
-/* Tout ce qui dépend des filtres : indicateurs, rappel des filtres, tableau.
-   Rendu seul à chaque frappe, pour ne pas reconstruire les champs de saisie. */
-function vEcheancierCorps(){
-  var rows=filtered();
+/* Filtres de colonne, dans l'en-tête du tableau. Rendus une seule fois avec
+   l'en-tête : ils survivent aux rafraîchissements du corps, donc le curseur
+   et les suggestions restent en place pendant la frappe. */
+function fcol(id, val, liste, placeholder){
+  // size="1" : la largeur du champ suit celle de la colonne, et non l'inverse
+  return '<th><div class="loupe sm"><input type="text" size="1" id="'+id+'"'+(liste?' list="dl_'+id+'"':'')+' value="'+esc(val)+
+    '" placeholder="'+esc(placeholder||"")+'" autocomplete="off" spellcheck="false" aria-label="Filtrer la colonne">'+ICONE_LOUPE+
+    (liste?'<datalist id="dl_'+id+'">'+liste.map(function(o){ return '<option value="'+esc(o)+'">'; }).join("")+'</datalist>':'')+'</div></th>';
+}
+var STATUTS_ECH=["Brouillon","En cours d'ouverture","En attente de BL","À venir","Échéance proche","En retard","Partiellement réglé","Soldé","Soldé avec retard"];
+function vEcheancierEntete(){
+  var f=S.filters;
+  return '<thead><tr>'+
+    '<th>Échéance</th><th class="r">Retard</th><th>Entité</th><th>Banque</th><th>Fournisseur</th><th>Réf. crédit</th><th>Opération</th><th>Mode</th>'+
+    '<th class="r">Devise</th><th class="r">Contre-valeur</th><th class="r">Réglé</th><th class="r">Reste à payer</th><th>Statut</th></tr>'+
+    '<tr class="fcol"><th></th><th></th>'+
+    fcol("f_entite",f.entite,S.ref.entites,"")+
+    fcol("f_contrepartie",f.contrepartie,S.ref.contreparties,"")+
+    fcol("f_fournisseur",f.fournisseur,S.ref.fournisseurs,"Fournisseur")+
+    fcol("f_ref",f.ref||"",null,"Référence")+
+    fcol("f_objet",f.objet||"",null,"Opération")+
+    fcol("f_mode",f.mode,S.ref.modes,"")+
+    '<th><select id="f_devise" aria-label="Filtrer la devise"><option value="">Toutes</option>'+selOpts(["XOF","EUR","USD"],f.devise)+'</select></th>'+
+    '<th></th><th></th><th></th>'+
+    '<th><select id="f_statut" aria-label="Filtrer le statut"><option value="">Tous</option>'+selOpts(STATUTS_ECH,f.statut)+'</select></th>'+
+    '</tr></thead>';
+}
+/* Retard en jours, seulement quand il y en a un : le reste de la colonne
+   reste vide pour que l'œil ne s'arrête que sur les retards. */
+function retardCel(e){
+  var d=days(e.dateEcheance);
+  if(d===null || reste(e)<=0 || estSolde(e) || d>=0) return '<td class="r mono retard vide">—</td>';
+  return '<td class="r mono retard">'+(-d)+' j</td>';
+}
+function vEchKpi(rows){
   var tot=somme(rows,montant), pay=somme(rows,paye), res=somme(rows,reste);
   var vivants=rows.filter(function(e){ return reste(e)>0; });
   var retard=rows.filter(function(e){ return statut(e)==="En retard"; });
   var trente=rows.filter(function(e){ var d=days(e.dateEcheance); return reste(e)>0 && d!==null && d>=0 && d<=30; });
+  return '<div class="grid g4" style="margin:12px 0">'+
+    kpiC("Engagé", md(tot), rows.length+" échéance"+(rows.length>1?"s":""), "")+
+    kpiC("Déjà réglé", md(pay), "taux de règlement "+pct1(part(pay,tot)), "vrt")+
+    kpiC("Reste à payer", md(res), vivants.length+" ligne"+(vivants.length>1?"s":"")+" vivante"+(vivants.length>1?"s":"")+" · "+md(somme(trente,reste))+" sous 30 j", "")+
+    kpiC("En retard", md(somme(retard,reste)), retard.length+" échéance"+(retard.length>1?"s":"")+" dépassée"+(retard.length>1?"s":""), retard.length?"rge":"")+
+    '</div>';
+}
+function vEchChips(){
   var actifs=filtresActifs(), libs=libFiltres();
-  var NC=11, body="", curM=null;
-  if(!rows.length) body='<tr><td colspan="'+NC+'"><div class="empty"><strong>Aucune échéance ne correspond</strong>'+
-    (actifs.length?'Élargissez les filtres ou réinitialisez-les.':'Saisissez un engagement ou reprenez votre fichier Excel.')+'</div></td></tr>';
+  if(!actifs.length) return "";
+  return '<div class="filtres-actifs"><span class="lib">'+actifs.length+' filtre'+(actifs.length>1?'s':'')+' :</span>'+
+    libs.map(function(x){ return '<span class="chip">'+esc(x)+'</span>'; }).join("")+
+    '<button class="btn sec sm" id="f_reset" style="margin-left:auto">Réinitialiser</button></div>';
+}
+var NC_ECH=13;
+function vEchTbody(rows){
+  if(!rows.length) return '<tr><td colspan="'+NC_ECH+'"><div class="empty"><strong>Aucune échéance ne correspond</strong>'+
+    (filtresActifs().length?'Élargissez les filtres ou réinitialisez-les.':'Saisissez un engagement ou reprenez votre fichier Excel.')+'</div></td></tr>';
+  var body="", curM=null;
   rows.forEach(function(e){
     var m=mois(e.dateEcheance);
     if(m!==curM){
       curM=m;
       var grp=rows.filter(function(x){ return mois(x.dateEcheance)===m; });
-      body+='<tr class="monthband"><td colspan="6">'+esc(moisLabel(m))+'<span class="nb">'+grp.length+' échéance'+(grp.length>1?'s':'')+'</span></td>'+
+      body+='<tr class="monthband"><td colspan="9">'+esc(moisLabel(m))+'<span class="nb">'+grp.length+' échéance'+(grp.length>1?'s':'')+'</span></td>'+
         '<td class="r mono">'+num(somme(grp,montant))+'</td><td class="r mono">'+n0(somme(grp,paye))+'</td>'+
-        '<td class="r mono">'+num(somme(grp,reste))+'</td><td colspan="2"></td></tr>';
+        '<td class="r mono">'+num(somme(grp,reste))+'</td><td></td></tr>';
     }
-    var st=statut(e), p=pct(e), enDevise=e.devise && e.devise!=="XOF";
+    var st=statut(e), enDevise=e.devise && e.devise!=="XOF";
     body+='<tr data-eng="'+esc(e.id)+'" class="ligne">'+
-      '<td class="rowline date" style="border-left-color:'+statutColor(st)+'"><b>'+dfr(e.dateEcheance)+'</b>'+echeanceHint(e)+'</td>'+
+      '<td class="rowline date mono" style="border-left-color:'+statutColor(st)+'">'+dfr(e.dateEcheance)+'</td>'+
+      retardCel(e)+
       '<td class="entite">'+esc(e.entite||"—")+'</td>'+
       '<td>'+esc(e.contrepartie||"—")+'</td>'+
-      '<td class="op">'+esc(e.fournisseur||"—")+(e.refCredit?'<small>'+esc(e.refCredit)+(e.rang?' · tranche '+esc(e.rang):"")+'</small>':"")+'</td>'+
-      '<td class="op">'+esc(e.objet||"—")+'<small>'+esc(e.mode||"")+(e.intraGroupe?' · intra-groupe':'')+'</small></td>'+
-      '<td class="r mono">'+(enDevise ? esc(e.devise)+' '+num2(e.montantDevise)+'<small>taux '+esc(e.taux||"—")+'</small>' : '<span style="color:var(--ink-3)">XOF</span>')+'</td>'+
+      '<td class="tronque" title="'+esc(e.fournisseur||"")+'">'+esc(e.fournisseur||"—")+'</td>'+
+      '<td class="mono tronque ref" title="'+esc(e.refCredit||"")+(e.rang?' · tranche '+esc(e.rang):'')+'">'+esc(e.refCredit||"—")+(e.rang?' <span class="tr">tr. '+esc(e.rang)+'</span>':'')+'</td>'+
+      '<td class="tronque op1" title="'+esc(e.objet||"")+'">'+esc(e.objet||"—")+'</td>'+
+      '<td>'+esc(e.mode||"—")+(e.intraGroupe?' <span class="tag t-attente">intra</span>':'')+'</td>'+
+      '<td class="r mono">'+(enDevise ? esc(e.devise)+' '+num2(e.montantDevise) : '<span class="vide">—</span>')+'</td>'+
       '<td class="r mono">'+num(montant(e))+'</td>'+
       '<td class="r mono">'+n0(paye(e))+'</td>'+
       '<td class="r mono reste"><b>'+(reste(e)?num(reste(e)):'—')+'</b></td>'+
-      '<td><div class="prog"><span class="bar"><i style="width:'+p+'%"></i></span><span class="pc">'+p+' %</span></div></td>'+
       '<td><span class="tag '+statutClass(st)+'">'+esc(st)+'</span></td></tr>';
   });
-  var tauxTot=tot?Math.round(pay/tot*100):0;
-  return '<div class="grid g4" style="margin:12px 0">'+
-      kpiC("Engagé", md(tot), rows.length+" échéance"+(rows.length>1?"s":""), "")+
-      kpiC("Déjà réglé", md(pay), "taux de règlement "+pct1(part(pay,tot)), "vrt")+
-      kpiC("Reste à payer", md(res), vivants.length+" ligne"+(vivants.length>1?"s":"")+" vivante"+(vivants.length>1?"s":"")+" · "+md(somme(trente,reste))+" sous 30 j", "")+
-      kpiC("En retard", md(somme(retard,reste)), retard.length+" échéance"+(retard.length>1?"s":"")+" dépassée"+(retard.length>1?"s":""), retard.length?"rge":"")+
-    '</div>'+
-    '<div class="panel">'+
-    (actifs.length ? '<div class="filtres-actifs"><span class="lib">'+actifs.length+' filtre'+(actifs.length>1?'s':'')+' :</span>'+
-        libs.map(function(x){ return '<span class="chip">'+esc(x)+'</span>'; }).join("")+
-        '<button class="btn sec sm" id="f_reset" style="margin-left:auto">Réinitialiser</button></div>' : '')+
-    '<div class="scroll"><table class="ech"><thead><tr>'+
-      '<th>Échéance</th><th>Entité</th><th>Banque</th><th>Fournisseur · réf.</th><th>Opération · mode</th><th class="r">Devise</th>'+
-      '<th class="r">Contre-valeur</th><th class="r">Réglé</th><th class="r">Reste à payer</th><th>Progression</th><th>Statut</th>'+
-    '</tr></thead><tbody>'+body+'</tbody>'+
-    (rows.length ? '<tfoot><tr><td colspan="6">TOTAL<span class="nb" style="font-weight:500;color:var(--ink-2);margin-left:8px">'+rows.length+' échéance'+(rows.length>1?'s':'')+'</span></td>'+
-      '<td class="r mono">'+num(tot)+'</td><td class="r mono">'+n0(pay)+'</td><td class="r mono">'+num(res)+'</td>'+
-      '<td><div class="prog"><span class="bar"><i style="width:'+tauxTot+'%"></i></span><span class="pc">'+tauxTot+' %</span></div></td><td></td></tr></tfoot>' : '')+
-    '</table></div></div>';
+  return body;
+}
+function vEchTfoot(rows){
+  if(!rows.length) return "";
+  var tot=somme(rows,montant), pay=somme(rows,paye), res=somme(rows,reste);
+  return '<tr><td colspan="9">TOTAL<span class="nb">'+rows.length+' échéance'+(rows.length>1?'s':'')+' · réglé à '+pct1(part(pay,tot))+'</span></td>'+
+    '<td class="r mono">'+num(tot)+'</td><td class="r mono">'+n0(pay)+'</td><td class="r mono">'+num(res)+'</td><td></td></tr>';
+}
+function vEcheancierCorps(){
+  var rows=filtered();
+  return '<div id="ech_kpi">'+vEchKpi(rows)+'</div>'+
+    '<div class="panel"><div id="ech_chips">'+vEchChips()+'</div>'+
+    '<div class="scroll"><table class="ech">'+vEcheancierEntete()+
+    '<tbody id="ech_tbody">'+vEchTbody(rows)+'</tbody><tfoot id="ech_tfoot">'+vEchTfoot(rows)+'</tfoot></table></div></div>';
+}
+/* À la frappe : tout ce qui dépend des filtres, et rien de ce qui les porte. */
+function rafraichirEcheancier(){
+  var rows=filtered(), z;
+  if((z=$("ech_kpi")))   z.innerHTML=vEchKpi(rows);
+  if((z=$("ech_chips"))) z.innerHTML=vEchChips();
+  if((z=$("ech_tbody"))) z.innerHTML=vEchTbody(rows);
+  if((z=$("ech_tfoot"))) z.innerHTML=vEchTfoot(rows);
+  if((z=$("ech_nb")))    z.textContent=nbEcheancier(rows);
 }
 function vEcheancier(){
   return '<div class="head"><div><h2>Échéancier<span class="badge-date">Au '+dfr(today())+'</span></h2>'+
@@ -2266,21 +2312,21 @@ async function echeancierPdf(){
     if(m!==curM){
       curM=m;
       var grp=rows.filter(function(x){ return mois(x.dateEcheance)===m; });
-      lignes.push({bande:true, v:[{content:moisLabel(m)+"  —  "+grp.length+" échéance"+(grp.length>1?"s":""), colSpan:8},
-                                  num(somme(grp,montant)), n0(somme(grp,paye)), num(somme(grp,reste)), "", ""]});
+      lignes.push({bande:true, v:[{content:moisLabel(m)+"  —  "+grp.length+" échéance"+(grp.length>1?"s":""), colSpan:9},
+                                  num(somme(grp,montant)), n0(somme(grp,paye)), num(somme(grp,reste)), ""]});
     }
     var d=days(e.dateEcheance), st=statut(e);
-    lignes.push([dfr(e.dateEcheance)+(reste(e)>0 && d!==null && d<0 ? "\nretard "+(-d)+" j" : ""), e.entite||"", e.contrepartie||"", e.fournisseur||"",
+    lignes.push([dfr(e.dateEcheance), (reste(e)>0 && d!==null && d<0) ? (-d)+" j" : "–", e.entite||"", e.contrepartie||"", e.fournisseur||"",
       (e.refCredit||"")+(e.rang?" · tr. "+e.rang:""), e.objet||"", e.mode||"",
-      (e.devise && e.devise!=="XOF") ? e.devise+" "+num2(e.montantDevise) : "XOF",
-      num(montant(e)), n0(paye(e)), reste(e)?num(reste(e)):"–", pct(e)+" %", st]);
+      (e.devise && e.devise!=="XOF") ? e.devise+" "+num2(e.montantDevise) : "–",
+      num(montant(e)), n0(paye(e)), reste(e)?num(reste(e)):"–", st]);
   });
-  lignes.push({tot:true, v:[{content:"TOTAL  —  "+rows.length+" échéance"+(rows.length>1?"s":""), colSpan:8}, num(tot), n0(pay), num(res), Math.round(part(pay,tot))+" %", ""]});
+  lignes.push({tot:true, v:[{content:"TOTAL  —  "+rows.length+" échéance"+(rows.length>1?"s":"")+"  ·  réglé à "+pct1(part(pay,tot)), colSpan:9}, num(tot), n0(pay), num(res), ""]});
 
-  K.section("Échéances par mois", "(triées par date, reste à payer en gras)");
-  K.tableau([{t:"ÉCHÉANCE",w:22,lb:true},{t:"ENTITÉ",w:14},{t:"BANQUE",w:15},{t:"FOURNISSEUR",w:28,lb:true},{t:"RÉF. · TR.",w:22,lb:true},{t:"OPÉRATION",lb:true},
+  K.section("Échéances par mois", "(triées par date, retard en jours, reste à payer en gras)");
+  K.tableau([{t:"ÉCHÉANCE",w:18},{t:"RETARD",a:"right",w:14},{t:"ENTITÉ",w:14},{t:"BANQUE",w:15},{t:"FOURNISSEUR",w:27,lb:true},{t:"RÉF. · TR.",w:27,lb:true},{t:"OPÉRATION",lb:true},
              {t:"MODE",w:15},{t:"MONTANT DEVISE",a:"right",w:24},{t:"CONTRE-\nVALEUR",a:"right",w:22},{t:"RÉGLÉ",a:"right",w:22},
-             {t:"RESTE",a:"right",w:22},{t:"%",a:"right",w:10},{t:"STATUT",w:18,lb:true}],
+             {t:"RESTE",a:"right",w:22},{t:"STATUT",w:18,lb:true}],
     lignes, {taille:6.4});
   K.note("Échéancier extrait du suivi des engagements, trié par date d'échéance et regroupé par mois. Les dossiers sans échéance n'y figurent pas. "+
     (filtres.length ? "Filtres appliqués : "+filtres.join(" ; ")+"." : "Aucun filtre appliqué."));
@@ -3332,8 +3378,7 @@ document.addEventListener("input", function(ev){
     S.filters[id.slice(2)]=ev.target.value;
     // seul le corps se recalcule : les champs restent en place, le curseur et
     // les suggestions avec eux
-    var zc=$("ech_corps");
-    if(zc){ zc.innerHTML=vEcheancierCorps(); var nb=$("ech_nb"); if(nb) nb.textContent=nbEcheancier(filtered()); return; }
+    if($("ech_tbody")){ rafraichirEcheancier(); return; }
     var m=$("main"); var sc=m.scrollTop;
     m.innerHTML=vEcheancier(); m.scrollTop=sc;
     var el=$(id); if(el && el.type==="text"){ el.focus(); el.setSelectionRange(el.value.length,el.value.length); }
