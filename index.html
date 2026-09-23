@@ -233,6 +233,15 @@ table.ech tr.fcol input,table.ech tr.fcol select{padding:3px 6px;font-size:11px;
 .coche{display:flex;align-items:center;gap:6px;height:34px;font-size:12.5px;color:var(--ink);white-space:nowrap}
 .coche input{width:auto;margin:0}
 table.ech td.obs{max-width:200px;color:var(--ink-2)}
+
+/* ---------- reprise Excel : observations d'analyse graduées ---------- */
+table.imp td{font-size:11.5px;padding:5px 7px;vertical-align:top}
+table.imp th{font-size:10px;text-transform:uppercase;letter-spacing:.02em}
+.fl{display:block;font-size:11px;line-height:1.35;padding:1px 0}
+.fl.n1{color:var(--ink-2)}
+.fl.n1::before{content:"ⓘ ";color:var(--blue)}
+.fl.n2{color:var(--amber);font-weight:600}
+.fl.n2::before{content:"▲ "}
 @media(max-width:900px){.filters.barre{grid-template-columns:1fr}}
 table.ech .monthband td{background:var(--blue-2);color:var(--ink);border-top:1px solid var(--line-strong);border-bottom:1px solid var(--line-strong)}
 table.ech .monthband .nb{font-weight:500;color:var(--ink-2);font-size:11.5px;margin-left:8px}
@@ -740,24 +749,47 @@ function toast(msg){
 function uniqSort(a){ var o=[]; a.forEach(function(x){ if(x && o.indexOf(x)<0) o.push(x); }); return o.sort(); }
 
 /* -------- parsing tolérant (reprise Excel) -------- */
+/* Nombres : « 1 200 000,00 », « 1.200.000,00 », « 1,200,000.00 », « USD 45 560 »,
+   « (12 500) ». Le séparateur décimal est celui qui vient en dernier ; une
+   virgule ou un point isolé n'est décimal que s'il est suivi d'un ou deux
+   chiffres. */
 function parseNum(v){
   if(v==null) return 0;
-  var s=String(v).replace(/\u00a0|\u202f/g," ").trim();
-  if(!s || s==="-" || s==="—") return 0;
-  s=s.replace(/[^0-9,.\-]/g,"");
-  if(s.indexOf(",")>-1 && s.indexOf(".")>-1) s=s.replace(/\./g,"").replace(",",".");
-  else if(s.indexOf(",")>-1) s=s.replace(/\s/g,"").replace(",",".");
+  var s=String(v).replace(/[  ]/g," ").trim();
+  if(!s || /^[-–—\/]$/.test(s)) return 0;
+  var neg=/^\s*[-–—(]/.test(s);
+  s=s.replace(/[^0-9,.]/g,"");
+  var vC=s.lastIndexOf(","), vP=s.lastIndexOf(".");
+  if(vC>-1 && vP>-1){ if(vC>vP) s=s.replace(/\./g,"").replace(",","."); else s=s.replace(/,/g,""); }
+  else if(vC>-1){ var pc=s.split(","); s=(pc.length===2 && pc[1].length<=2) ? pc[0]+"."+pc[1] : s.replace(/,/g,""); }
+  else if(vP>-1){ var pp=s.split("."); if(!(pp.length===2 && pp[1].length<=2)) s=s.replace(/\./g,""); }
   var n=parseFloat(s);
-  return isNaN(n)?0:n;
+  return isNaN(n) ? 0 : (neg?-n:n);
 }
+/* Dates : jj/mm/aaaa, aaaa-mm-jj (avec heure éventuelle), « 15 sept. 2026 »,
+   « 15-sept-26 », numéro de série Excel (46000), année à chiffre parasite. */
+var MOIS_TXT={jan:1,janv:1,fev:2,fevr:2,feb:2,mar:3,mars:3,avr:4,apr:4,mai:5,may:5,jun:6,juin:6,jul:7,juil:7,aou:8,aout:8,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12};
 function parseDate(v){
-  if(!v) return "";
-  var s=String(v).replace(/[^0-9\/\-\.]/g,"").trim();
-  if(!s || s==="/" ) return "";
+  if(v==null) return "";
+  var s=String(v).replace(/[  ]/g," ").trim();
+  if(!s || /^[-–—\/]$/.test(s)) return "";
+  var iso=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(iso) return dateValide(iso[1], iso[2], iso[3]);
+  if(/^\d{5}(\.\d+)?$/.test(s)){
+    var serie=Math.floor(Number(s));
+    if(serie>20000 && serie<80000) return new Date(Date.UTC(1899,11,30)+serie*86400000).toISOString().slice(0,10);
+  }
+  var t=normTxt(s).match(/^(\d{1,2})\s*[\/\-\. ]?\s*([a-z]{3,5})\.?\s*[\/\-\. ]?\s*(\d{2,4})$/);
+  if(t){
+    var mois=MOIS_TXT[t[2].slice(0,4)]!=null ? MOIS_TXT[t[2].slice(0,4)] : MOIS_TXT[t[2].slice(0,3)];
+    if(mois!=null) return dateValide(t[3], mois, t[1]);
+  }
+  s=s.split(/\s+/)[0].replace(/[^0-9\/\-\.]/g,"");
   var p=s.split(/[\/\-\.]/).filter(function(x){ return x!==""; });
   if(p.length<3) return "";
-  var a=p[0], b=p[1], c=p[2], y,m,d;
-  if(a.length>=4){ y=a; m=b; d=c; } else { d=a; m=b; y=c; }
+  return p[0].length>=4 ? dateValide(p[0],p[1],p[2]) : dateValide(p[2],p[1],p[0]);
+}
+function dateValide(y,m,d){
   y=String(y).replace(/[^0-9]/g,"");
   if(y.length===2) y="20"+y;
   if(y.length>4){                          // année à chiffre parasite : 20026 -> 2026
@@ -1803,82 +1835,207 @@ function vControles(){
 }
 
 /* ---------- reprise Excel ---------- */
+/* Colonnes reconnues. Si la première ligne collée est un en-tête, chaque
+   colonne est repérée par son intitulé, dans n'importe quel ordre ; sinon
+   c'est l'ordre ci-dessous qui s'applique. Les intitulés sont comparés sans
+   accents ni casse. */
+var COLS_IMPORT=[
+  {k:"entite",        t:"Entité",          m:/^ENTIT/},
+  {k:"contrepartie",  t:"Banque",          m:/^(BANQUE|CONTRE ?-? ?PARTIE|ETABLISSEMENT)/},
+  {k:"fournisseur",   t:"Fournisseur",     m:/^(FOURNISSEUR|BENEFICIAIRE|TIERS)/},
+  {k:"refCredit",     t:"Réf. crédit",     m:/^(REF|N[°O] ?(CREDIT|DOSSIER|REF)|NUMERO|NUM )/},
+  {k:"objet",         t:"Opération",       m:/^(OPERATION|OBJET|LIBELLE|DESIGNATION|DESCRIPTION)/},
+  {k:"dateCreation",  t:"Création",        m:/^(CREATION|DATE (DE )?CREATION|DATE (D')?OUVERTURE|OUVERTURE|DATE VALEUR|DATE OPERATION)/},
+  {k:"dateEcheance",  t:"Échéance",        m:/^(ECHEANCE|DATE (D')?ECHEANCE)/},
+  {k:"montantDevise", t:"Montant devise",  m:/^(MONTANT (EN )?DEVISE|MT DEVISE|MONTANT INITIAL|MONTANT$|MONTANT DEV)/},
+  {k:"devise",        t:"Devise",          m:/^(DEVISE|MONNAIE|CURRENCY)/},
+  {k:"montantXof",    t:"Montant XOF",     m:/^(MONTANT (XOF|F ?CFA|CFA)|CONTRE ?-? ?VALEUR|CV( XOF)?$|XOF|F ?CFA|MONTANT EN F)/},
+  {k:"mode",          t:"Mode",            m:/^(MODE|NATURE|TYPE( DE)? (FINANCEMENT|CREDIT)|INSTRUMENT)/},
+  {k:"datePaiement",  t:"Date paiement",   m:/^(DATE (DE )?(PAIEMENT|REGLEMENT)|PAIEMENT|PAYE LE|REGLE LE)/},
+  {k:"montantPaye",   t:"Montant payé",    m:/^(MONTANT (PAYE|REGLE)|PAYE|REGLE|DEJA REGLE|REGLEMENT)/},
+  {k:"reste",         t:"Reste à payer",   m:/^(RESTE|SOLDE|RESTANT)/},
+  {k:"pct",           t:"%",               m:/^(%|POURCENT|TAUX (DE )?REGL|AVANCEMENT)/},
+  {k:"statut",        t:"Statut",          m:/^(STATUT|ETAT|SITUATION)/},
+  {k:"observations",  t:"Observations",    m:/^(OBSERVATION|COMMENTAIRE|REMARQUE|NOTE)/}
+];
+function normEnTete(s){ return normTxt(s).toUpperCase().replace(/[\u00a0\u202f]/g," ").replace(/\s+/g," ").trim(); }
+function detecterEnTete(cells){
+  var carte={}, n=0;
+  cells.forEach(function(c,i){
+    var h=normEnTete(c); if(!h) return;
+    for(var j=0;j<COLS_IMPORT.length;j++){
+      var col=COLS_IMPORT[j];
+      if(carte[col.k]===undefined && col.m.test(h)){ carte[col.k]=i; n++; return; }
+    }
+  });
+  return n>=4 ? carte : null;
+}
+function carteParDefaut(){ var c={}; COLS_IMPORT.forEach(function(col,i){ c[col.k]=i; }); return c; }
+
+/* Devise : code, symbole ou mot ; à défaut, déduite du rapport entre les
+   deux montants ou de l'objet. */
+function deviseDe(txt, objet, mDev, mXof){
+  var s=normEnTete(txt);
+  if(/EUR|€|EURO/.test(s)) return {d:"EUR", sur:true};
+  if(/USD|\$|DOLLAR|^US$/.test(s)) return {d:"USD", sur:true};
+  if(/XOF|CFA|^F$|FRANC/.test(s)) return {d:"XOF", sur:true};
+  if(mDev && mXof && Math.abs(mDev-mXof)>0.5){
+    var r=mXof/mDev;
+    if(Math.abs(r-655.957)<1) return {d:"EUR", sur:false, motif:"rapport des montants = parité EUR"};
+    if(r>=400 && r<=800) return {d:"USD", sur:false, motif:"rapport des montants ≈ "+num2(r)};
+  }
+  var o=normEnTete(objet);
+  if(/\bEUR\b|€/.test(o)) return {d:"EUR", sur:false, motif:"objet en EUR"};
+  if(/\bUSD\b|\$/.test(o)) return {d:"USD", sur:false, motif:"objet en USD"};
+  return {d:"XOF", sur:!s};
+}
+var MODES_SYN={ "CREDIT DOCUMENTAIRE":"CREDOC", "LC":"CREDOC", "L/C":"CREDOC", "LETTRE DE CREDIT":"CREDOC",
+                "AVANCE":"AV", "AVANCE FOURNISSEUR":"AV", "TRAITE":"TRAITE AVALISEE", "RELAIS":"CREDIT RELAIS", "SPOT":"CREDIT SPOT" };
+function normMode(s){ var m=normEnTete(s); return MODES_SYN[m]||m; }
+function estTotal(cells){
+  var t=cells.slice(0,4).map(normEnTete).join(" ");
+  return /(^|\s)(S\/?TOTAL|SOUS-?TOTAL|TOTAL|TOTAUX|CUMUL)(\s|$)/.test(t);
+}
+function cleDoublon(e){ return [normRef(e.refCredit), normEnTete(e.fournisseur), Math.round(Number(e.montantXof)||0), e.dateEcheance||""].join("|"); }
+
+function analyser(txt){
+  var lignes=txt.split(/\r?\n/), rows=[], rejets=[], flagsAttention=0, doublons=0;
+  var carte=null, enTete=false, prec=null, vus={};
+  S.eng.forEach(function(e){ vus[cleDoublon(e)]="app"; });
+  var F=function(l,m,n){ l.push({m:m, n:n||1}); };   // n : 1 information, 2 attention
+
+  lignes.forEach(function(ligne, idx){
+    var no=idx+1;
+    if(!ligne.trim()) return;                                        // ligne vide : rien à dire
+    var c=ligne.split("\t");
+    if(!carte){
+      var d=detecterEnTete(c);
+      if(d){ carte=d; enTete=true; return; }
+      carte=carteParDefaut();
+    }
+    var g=function(k){ var i=carte[k]; return i===undefined ? "" : String(c[i]||"").replace(/[\u00a0\u202f]/g," ").trim(); };
+    var extrait=c.filter(function(x){ return x.trim(); }).slice(0,4).join(" · ").slice(0,90);
+
+    if(estTotal(c)){ rejets.push({n:no, motif:"ligne de total ou de cumul", extrait:extrait}); return; }
+    if(/^ENTIT/.test(normEnTete(c[0]||""))){ rejets.push({n:no, motif:"ligne d'en-tête répétée", extrait:extrait}); return; }
+    if(c.length<3){ rejets.push({n:no, motif:"ligne trop courte ("+c.length+" cellule"+(c.length>1?"s":"")+") : hors tableau ou tronquée", extrait:extrait}); return; }
+
+    var f=[];
+    var entite=normEnTete(g("entite")).replace(/^\/$/,"");
+    var banque=normEnTete(g("contrepartie")), fourn=normEnTete(g("fournisseur")), ref=normRef(g("refCredit"));
+    var objet=g("objet");
+    var mDev=parseNum(g("montantDevise")), mXof=parseNum(g("montantXof")), mPay=parseNum(g("montantPaye")), reste=g("reste")?parseNum(g("reste")):null;
+
+    // ligne sans contenu chiffré ni objet : un libellé de groupe, pas un engagement
+    if(!mDev && !mXof && !objet && !ref){ rejets.push({n:no, motif:"aucun montant ni opération : libellé de groupe ?", extrait:extrait}); return; }
+
+    // cellules fusionnées dans Excel : la valeur n'est écrite que sur la première ligne du groupe
+    if(!entite && prec){ entite=prec.entite; F(f,"entité reprise de la ligne du dessus ("+entite+")",1); }
+    if(!entite){ rejets.push({n:no, motif:"entité absente, et aucune ligne au-dessus pour la reprendre", extrait:extrait}); return; }
+    if(!banque && prec && prec.entite===entite){ banque=prec.contrepartie; F(f,"banque reprise de la ligne du dessus",1); }
+    if(!fourn && prec && prec.entite===entite){ fourn=prec.fournisseur; F(f,"fournisseur repris de la ligne du dessus",1); }
+    if(!ref && prec && prec.entite===entite && prec.fournisseur===fourn && prec.refCredit){ ref=prec.refCredit; F(f,"référence reprise de la ligne du dessus",1); }
+    if(S.ref.entites.length && S.ref.entites.indexOf(entite)<0) F(f,"entité « "+entite+" » absente du référentiel",2);
+    if(banque && S.ref.contreparties.indexOf(banque)<0) F(f,"banque « "+banque+" » absente du référentiel",1);
+
+    // devise et montants
+    var dv=deviseDe(g("devise"), objet, mDev, mXof), devise=dv.d;
+    if(!dv.sur && g("devise")) F(f,"devise « "+g("devise")+" » non reconnue : "+devise+" retenue"+(dv.motif?" ("+dv.motif+")":""),2);
+    else if(!dv.sur && dv.motif) F(f,"devise déduite : "+devise+" ("+dv.motif+")",1);
+    var dCre=parseDate(g("dateCreation")), dEch=parseDate(g("dateEcheance"));
+    if(g("dateCreation") && !dCre) F(f,"date de création illisible « "+g("dateCreation")+" »",2);
+    if(g("dateEcheance") && !dEch) F(f,"date d'échéance illisible « "+g("dateEcheance")+" » : la ligne passe en attente d'échéance",2);
+    var taux=1;
+    if(devise==="XOF"){
+      if(!mXof) mXof=mDev; mDev=mXof;
+      if(!mXof){ rejets.push({n:no, motif:"montant absent", extrait:extrait}); return; }
+    } else {
+      var tRef=tauxPour(devise, dCre||dEch||today());
+      if(mDev && mXof){
+        taux=Math.round(mXof/mDev*1000)/1000;
+        if(devise==="EUR" && Math.abs(taux-655.957)>0.5) F(f,"taux EUR "+num2(taux)+" ≠ parité 655,957 : contre-valeur du fichier conservée",2);
+        if(devise==="USD" && (taux<Number(S.params.tauxUsdMin)||taux>Number(S.params.tauxUsdMax))) F(f,"taux USD "+num2(taux)+" hors bornes "+S.params.tauxUsdMin+"–"+S.params.tauxUsdMax+" : contre-valeur du fichier conservée",2);
+      } else if(mDev && !mXof){
+        if(!tRef){ rejets.push({n:no, motif:"contre-valeur absente et aucun taux "+devise+" de référence dans les Référentiels", extrait:extrait}); return; }
+        taux=tRef; mXof=Math.round(mDev*tRef); F(f,"contre-valeur calculée au taux de référence "+num2(tRef),1);
+      } else if(!mDev && mXof){
+        if(tRef){ taux=tRef; mDev=Math.round(mXof/tRef*100)/100; F(f,"montant en devise déduit de la contre-valeur au taux "+num2(tRef),1); }
+        else { taux=0; F(f,"montant en devise inconnu (aucun taux de référence)",2); }
+      } else { rejets.push({n:no, motif:"montant absent", extrait:extrait}); return; }
+    }
+    mXof=Math.round(mXof);
+    if(dCre && dEch && dCre>dEch) F(f,"création postérieure à l'échéance",2);
+
+    // règlements et cohérence
+    var regs=[], dPay=parseDate(g("datePaiement")), stTxt=normEnTete(g("statut"));
+    if(g("datePaiement") && !dPay) F(f,"date de paiement illisible « "+g("datePaiement")+" »",2);
+    if(mPay>mXof+1){ F(f,"règlement "+num(mPay)+" supérieur au montant : plafonné à "+num(mXof),2); mPay=mXof; }
+    if(mPay>0){
+      if(!dPay) F(f,"règlement sans date : accepté, daté à l'échéance",1);
+      regs.push({ date:dPay||dEch||dCre||"", montant:Math.round(mPay), canal:"", ref:"", incertain:!dPay });
+    }
+    var soldeFichier = /SOLD|PAYE|REGLE|CLOTUR/.test(stTxt) || (reste!==null && Math.abs(reste)<1 && mXof>0);
+    if(soldeFichier && mPay<mXof-0.5){
+      var complement=Math.round(mXof-mPay);
+      regs.push({ date:dPay||dEch||dCre||"", montant:complement, canal:"", ref:"", incertain:true });
+      F(f,"soldé d'après le fichier : règlement complété de "+num(complement)+(dPay?"":" à l'échéance"),2);
+    }
+    if(reste!==null && !soldeFichier){
+      var attendu=mXof-Math.round(mPay);
+      if(Math.abs(reste-attendu)>1) F(f,"reste du fichier "+num(reste)+" ≠ montant − payé = "+num(attendu),2);
+    }
+
+    var row={
+      id:uid(), entite:entite, contrepartie:banque||"ND", fournisseur:fourn, refCredit:ref, objet:objet,
+      dateCreation:dCre, dateEcheance:dEch, devise:devise, montantDevise:mDev, taux:taux, montantXof:mXof,
+      mode:normMode(g("mode")), observations:g("observations")||"", reglements:regs,
+      brouillon:false, attenteBL:!dEch, intraGroupe:false, _flags:f, _no:no
+    };
+    var cle=cleDoublon(row);
+    if(vus[cle]==="app"){ F(f,"déjà présent dans l'application : non enregistré",2); row._doublon=true; doublons++; }
+    else if(vus[cle]==="fichier"){ F(f,"en double dans le fichier : non enregistré",2); row._doublon=true; doublons++; }
+    else vus[cle]="fichier";
+    if(f.some(function(x){ return x.n===2; })) flagsAttention++;
+    rows.push(row); prec=row;
+  });
+  return { rows:rows, rejets:rejets, ignored:rejets.length, flags:flagsAttention, doublons:doublons, carte:carte||carteParDefaut(), enTete:enTete };
+}
+
 function vImport(){
   var st=S.importState;
+  var aEnregistrer = st ? st.rows.filter(function(r){ return !r._doublon; }).length : 0;
+  var colonnes=COLS_IMPORT.map(function(c){ return c.t; }).join(" · ");
+  var carteHtml = st ? '<div class="hint" style="margin-bottom:8px">'+(st.enTete
+      ? 'En-tête reconnu : colonnes repérées par leur intitulé — '
+      : 'Aucun en-tête reconnu : ordre des colonnes par défaut — ')+
+      COLS_IMPORT.filter(function(c){ return st.carte[c.k]!==undefined; }).map(function(c){ return esc(c.t)+' ← col. '+(st.carte[c.k]+1); }).join(', ')+'.</div>' : '';
   return '<div class="head"><div><h2>Reprise du fichier Excel</h2>'+
-    '<p>Copiez les lignes depuis Excel et collez-les ici. Les lignes de totalisation sont ignorées, les dates et les montants sont corrigés, les anomalies sont signalées avant enregistrement.</p></div></div>'+
+    '<p>Copiez les lignes depuis Excel, en-tête compris de préférence, et collez-les ici. Les colonnes sont reconnues à leur intitulé, les cellules fusionnées sont reprises de la ligne du dessus, les dates et montants sont interprétés avec tolérance. Chaque écart est expliqué avant enregistrement.</p></div></div>'+
     '<div class="panel"><div class="pb">'+
-      '<div class="field"><label>Colonnes attendues, dans l\'ordre du fichier</label>'+
-      '<div class="hint">Entité · Banque · Fournisseur · Réf crédit · Opérations · Création · Échéance · Montant devise · Devise · Montant XOF · Mode · Date paiement · Montant payé · Reste à payer · % · Statut · Observations</div></div>'+
-      '<div class="field"><label>Données collées</label><textarea id="imp_data" rows="8" placeholder="Collez ici (Ctrl+V) la sélection copiée depuis Excel"></textarea></div>'+
+      '<div class="field"><label>Colonnes reconnues (dans cet ordre si le fichier n\'a pas d\'en-tête)</label><div class="hint">'+esc(colonnes)+'</div></div>'+
+      '<div class="field"><label>Données collées</label><textarea id="imp_data" rows="8" placeholder="Collez ici (Ctrl+V) la sélection copiée depuis Excel, ligne d\'en-tête comprise"></textarea></div>'+
       '<div class="inline"><button class="btn sec" id="impAnalyse">Analyser</button>'+
-      (st&&st.rows&&st.rows.length?'<button class="btn" id="impValider"'+(S.writable?"":" disabled")+'>Enregistrer '+st.rows.length+' engagements</button>':"")+
+      (st&&aEnregistrer?'<button class="btn" id="impValider"'+(S.writable?"":" disabled")+'>Enregistrer '+aEnregistrer+' engagement'+(aEnregistrer>1?'s':'')+'</button>':"")+
       '</div></div></div>'+
-    (st? '<div class="panel" style="margin-top:14px"><div class="ph"><h3>Aperçu</h3>'+
-      '<span style="font-size:12px;color:var(--ink-2)">'+st.rows.length+' lignes retenues · '+st.ignored+' lignes ignorées · '+st.flags+' corrections</span></div>'+
-      '<div class="scroll"><table><thead><tr><th>Entité</th><th>Contrepartie</th><th>Fournisseur</th><th>Opération</th><th>Échéance</th><th class="r">Contre-valeur</th><th class="r">Réglé</th><th>Corrections</th></tr></thead><tbody>'+
-      st.rows.slice(0,80).map(function(r){
-        return '<tr><td>'+esc(r.entite)+'</td><td>'+esc(r.contrepartie)+'</td><td>'+esc(r.fournisseur)+'</td>'+
-        '<td class="op">'+esc(r.objet)+(r.refCredit?'<small>'+esc(r.refCredit)+'</small>':"")+'</td>'+
-        '<td class="mono">'+dfr(r.dateEcheance)+'</td><td class="r mono">'+num(r.montantXof)+'</td>'+
-        '<td class="r mono">'+num((r.reglements||[]).reduce(function(s,x){return s+x.montant;},0))+'</td>'+
-        '<td style="font-size:11.5px;color:var(--amber)">'+esc((r._flags||[]).join(" · "))+'</td></tr>';
-      }).join("")+'</tbody></table></div>'+
-      (st.rows.length>80?'<div class="pb hint">80 premières lignes affichées.</div>':"")+
-      '</div>':"");
-}
-function analyser(txt){
-  var lines=txt.split(/\r?\n/), rows=[], ignored=0, flags=0;
-  var buf="", pending=null;
-  lines.forEach(function(line){
-    if(!line.trim()){ ignored++; return; }
-    var c=line.split("\t");
-    if(c.length<6){ ignored++; return; }
-    var joined=line.toUpperCase();
-    if(/TOTAL\s+(GENERAL|ENGAGEMENT|REPORT)/.test(joined) || /^ENTIT/.test(joined.replace(/^\s+/,"")) || /TABLEAU DES ENGAG/.test(joined)){ ignored++; return; }
-    var g=function(i){ return (c[i]||"").replace(/\u00a0|\u202f/g," ").trim(); };
-    var entite=g(0).toUpperCase();
-    if(!entite || entite==="/"){ ignored++; return; }
-    var f=[];
-    var devise=(g(8)||"XOF").toUpperCase().replace(/[^A-Z]/g,"")||"XOF";
-    if(["XOF","EUR","USD"].indexOf(devise)<0) devise="XOF";
-    var mDev=parseNum(g(7)), mXof=parseNum(g(9));
-    if(!mXof && mDev && devise==="XOF") mXof=mDev;
-    var dCre=parseDate(g(5)), dEch=parseDate(g(6));
-    if(g(5) && !dCre) f.push("date de création illisible");
-    if(g(6) && !dEch) f.push("date d'échéance illisible");
-    var taux = (devise==="XOF")?1:(mDev? mXof/mDev : 0);
-    if(devise==="EUR"){
-      var te=Number(S.params.tauxEur)||655.957;
-      if(taux && Math.abs(taux-te)>0.5) f.push("taux EUR recalculé");
-      taux=te; mXof=Math.round(mDev*te);
-    }
-    if(devise==="USD" && taux){
-      taux=Math.round(taux*100)/100;
-      if(taux<Number(S.params.tauxUsdMin)||taux>Number(S.params.tauxUsdMax)) f.push("taux USD "+num2(taux)+" hors bornes");
-    }
-    var objet=g(4);
-    if(devise==="EUR" && /\bUSD\b/.test(objet.toUpperCase()) && !/\bEUR\b/.test(objet.toUpperCase())) f.push("devise à vérifier : objet en USD");
-    var dPay=parseDate(g(11)), mPay=parseNum(g(12));
-    var regs=[];
-    if(mPay>0){
-      if(!dPay){ f.push("règlement historique sans date, accepté tel quel"); }
-      regs.push({ date:dPay||"", montant:Math.round(mPay), canal:"", ref:"", incertain:!dPay });
-    } else {
-      var stTxt=(g(15)||"").toUpperCase();
-      if(/SOLD/.test(stTxt) && mXof>0){ f.push("marqué soldé sans règlement — à confirmer"); }
-    }
-    if(dCre && dEch && dCre>dEch) f.push("création postérieure à l'échéance");
-    if(f.length) flags++;
-    rows.push({
-      id:uid(), entite:entite, contrepartie:g(1).toUpperCase()||"ND", fournisseur:g(2).toUpperCase(),
-      refCredit:normRef(g(3)), objet:objet, dateCreation:dCre, dateEcheance:dEch,
-      devise:devise, montantDevise:mDev, taux:taux, montantXof:Math.round(mXof),
-      mode:g(10).toUpperCase(), observations:g(16)||"", reglements:regs,
-      brouillon:false, attenteBL:!dEch, intraGroupe:false, _flags:f
-    });
-  });
-  return { rows:rows, ignored:ignored, flags:flags };
+    (st ? '<div class="panel" style="margin-top:14px"><div class="ph"><h3>Résultat de l\'analyse</h3>'+
+        '<span style="font-size:12px;color:var(--ink-2)">'+st.rows.length+' ligne'+(st.rows.length>1?'s':'')+' lue'+(st.rows.length>1?'s':'')+' · '+
+        aEnregistrer+' à enregistrer · '+st.doublons+' doublon'+(st.doublons>1?'s':'')+' · '+st.flags+' à vérifier · '+st.ignored+' ignorée'+(st.ignored>1?'s':'')+'</span></div>'+
+      '<div class="pb">'+carteHtml+
+      (st.ignored ? '<details'+(st.rows.length?'':' open')+' style="margin-bottom:10px"><summary style="cursor:pointer;font-size:12.5px;font-weight:600">'+st.ignored+' ligne'+(st.ignored>1?'s':'')+' ignorée'+(st.ignored>1?'s':'')+' — pourquoi</summary>'+
+        '<div class="scroll"><table><thead><tr><th>Ligne</th><th>Motif</th><th>Extrait</th></tr></thead><tbody>'+
+        st.rejets.slice(0,60).map(function(r){ return '<tr><td class="mono">'+r.n+'</td><td>'+esc(r.motif)+'</td><td class="hint" style="margin:0">'+esc(r.extrait)+'</td></tr>'; }).join("")+
+        '</tbody></table></div>'+(st.rejets.length>60?'<div class="hint">60 premières affichées.</div>':'')+'</details>' : '')+
+      (st.rows.length ? '<div class="scroll"><table class="imp"><thead><tr><th>L.</th><th>Entité</th><th>Banque</th><th>Fournisseur</th><th>Réf.</th><th>Opération</th><th>Échéance</th><th>Devise</th><th class="r">Montant devise</th><th class="r">Contre-valeur</th><th class="r">Réglé</th><th>Statut</th><th>Observations d\'analyse</th></tr></thead><tbody>'+
+        st.rows.slice(0,120).map(function(r){
+          var pay=(r.reglements||[]).reduce(function(s,x){ return s+x.montant; },0);
+          return '<tr'+(r._doublon?' style="opacity:.55"':'')+'><td class="mono hint" style="margin:0">'+r._no+'</td><td><b>'+esc(r.entite)+'</b></td><td>'+esc(r.contrepartie)+'</td><td>'+esc(r.fournisseur||"—")+'</td>'+
+            '<td class="mono">'+esc(r.refCredit||"—")+'</td><td class="tronque" title="'+esc(r.objet)+'" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r.objet||"—")+'</td>'+
+            '<td class="mono">'+dfr(r.dateEcheance)+'</td><td>'+esc(r.devise)+'</td><td class="r mono">'+(r.devise!=="XOF"?num2(r.montantDevise):'—')+'</td>'+
+            '<td class="r mono"><b>'+num(r.montantXof)+'</b></td><td class="r mono">'+n0(pay)+'</td>'+
+            '<td><span class="tag '+statutClass(statut(r))+'">'+esc(statut(r))+'</span></td>'+
+            '<td>'+(r._flags.length?r._flags.map(function(x){ return '<span class="fl n'+x.n+'">'+esc(x.m)+'</span>'; }).join(""):'<span class="hint" style="margin:0">—</span>')+'</td></tr>';
+        }).join("")+'</tbody></table></div>'+(st.rows.length>120?'<div class="hint" style="margin-top:6px">120 premières lignes affichées ; toutes seront enregistrées.</div>':'') : '')+
+      '</div></div>' : "");
 }
 
 /* ---------- référentiels ---------- */
@@ -3278,11 +3435,12 @@ document.addEventListener("click", async function(ev){
   if(ev.target.id==="impValider"){
     if(!S.importState || !S.importState.rows.length) return;
     ev.target.disabled=true; ev.target.textContent="Enregistrement…";
-    var rows=S.importState.rows, byB={};
+    // les doublons repérés à l'analyse ne sont pas enregistrés
+    var rows=S.importState.rows.filter(function(r){ return !r._doublon; }), byB={};
     rows.forEach(function(r){
       var b=bucketId(r.dateEcheance);
       byB[b]=byB[b]||{};
-      var copy={}; Object.keys(r).forEach(function(k){ if(k!=="_flags" && k!=="id") copy[k]=r[k]; });
+      var copy={}; Object.keys(r).forEach(function(k){ if(k.charAt(0)!=="_" && k!=="id") copy[k]=r[k]; });
       copy.createdAt=new Date().toISOString();
       byB[b][r.id]=copy;
     });
