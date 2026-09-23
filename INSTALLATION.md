@@ -106,6 +106,36 @@ que les politiques autorisent, une fois la personne authentifiée. N'y mettez ja
 Si les valeurs restent à `A_REMPLACER`, l'application démarre en mode autonome : données
 dans le navigateur, sans authentification ni partage. Le pied du bandeau l'indique.
 
+## Reprise Excel : ce que l'analyse accepte, corrige et signale
+
+Copiez les lignes depuis Excel **en-tête compris** et collez-les dans le module Reprise Excel.
+
+- **Colonnes** : reconnues à leur intitulé (sans accents ni casse), dans n'importe quel ordre.
+  Sans en-tête, l'ordre par défaut s'applique : Entité · Banque · Fournisseur · Réf. crédit ·
+  Opération · Création · Échéance · Montant devise · Devise · Montant XOF · Mode · Date
+  paiement · Montant payé · Reste à payer · % · Statut · Observations. L'écran affiche la
+  correspondance retenue.
+- **Cellules fusionnées** : une entité, banque, fournisseur ou référence vide reprend la valeur
+  de la ligne du dessus, et le dit.
+- **Devises** : EUR / € / EURO, USD / $ / DOLLAR, XOF / CFA / FCFA ; à défaut, déduite du rapport
+  des montants ou de l'objet, et signalée.
+- **Dates** : `jj/mm/aaaa`, `aaaa-mm-jj`, « 15 sept. 2026 », « 15-sept-26 », numéro de série
+  Excel. Une échéance illisible met la ligne en attente d'échéance, sans la rejeter.
+- **Montants** : formats français, portugais et anglais, devise accolée. Le séparateur décimal
+  est celui qui vient en dernier.
+- **Contre-valeur** : celle du fichier est **conservée** ; l'écart avec la parité EUR ou les
+  bornes USD est signalé. Si elle manque, elle est calculée au taux de référence.
+- **Cohérence** : règlement supérieur au montant plafonné ; ligne « soldée » sans règlement
+  complétée à l'échéance ; reste du fichier comparé au calcul ; entité ou banque hors
+  référentiel signalée.
+- **Doublons** : avec l'application et au sein du collage, signalés et **non enregistrés**. On
+  peut donc recoller un fichier entier : seules les lignes nouvelles s'ajoutent.
+- **Lignes ignorées** : chacune est listée avec son numéro, son motif et un extrait — total,
+  en-tête répété, ligne tronquée, libellé de groupe, montant absent, entité introuvable.
+
+Les observations d'analyse sont graduées : ⓘ information (rien à faire), ▲ attention (à
+vérifier avant d'enregistrer).
+
 ## Livrables : rapports et envoi hebdomadaire
 
 Onglet **Tableau de bord → Rapports**. Trois livrables, calculés sur la situation du jour.
